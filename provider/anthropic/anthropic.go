@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/delavalom/graft"
@@ -200,15 +201,7 @@ func convertMessages(msgs []graft.Message) (string, []anthropicMessage) {
 		}
 	}
 
-	system := ""
-	if len(systemParts) > 0 {
-		for i, p := range systemParts {
-			if i > 0 {
-				system += "\n"
-			}
-			system += p
-		}
-	}
+	system := strings.Join(systemParts, "\n")
 	return system, out
 }
 

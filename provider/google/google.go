@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/delavalom/graft"
@@ -235,10 +236,11 @@ func (c *Client) Generate(ctx context.Context, params graft.GenerateParams) (*gr
 	}
 
 	candidate := apiResp.Candidates[0]
-	var text string
+	var sb strings.Builder
 	for _, part := range candidate.Content.Parts {
-		text += part.Text
+		sb.WriteString(part.Text)
 	}
+	text := sb.String()
 
 	msg := graft.Message{
 		Role:    graft.RoleAssistant,
