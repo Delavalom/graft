@@ -13,7 +13,7 @@ func main() {
 	model := openai.New(
 		openai.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
 		openai.WithBaseURL("https://openrouter.ai/api/v1"),
-		openai.WithModel("anthropic/claude-sonnet-4-20250514"),
+		openai.WithModel("anthropic/claude-sonnet-4.6"),
 	)
 
 	codeReviewer := graft.NewAgent("code-reviewer",
