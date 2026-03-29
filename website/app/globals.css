@@ -1,0 +1,88 @@
+@import "tailwindcss";
+
+html {
+  color-scheme: dark only;
+}
+
+@theme inline {
+  /* Jade accent scale */
+  --color-jade-50: #ecfdf5;
+  --color-jade-100: #d1fae5;
+  --color-jade-200: #a7f3d0;
+  --color-jade-300: #6ee7b7;
+  --color-jade-400: #34d399;
+  --color-jade-500: #10b981;
+  --color-jade-600: #059669;
+  --color-jade-700: #047857;
+  --color-jade-800: #065f46;
+  --color-jade-900: #064e3b;
+
+  /* Dark background scale */
+  --color-dark-100: #1a2e22;
+  --color-dark-200: #142318;
+  --color-dark-300: #0f1d14;
+  --color-dark-400: #0a1a12;
+  --color-dark-500: #081510;
+  --color-dark-600: #050f0a;
+  --color-dark-700: #030a06;
+  --color-dark-800: #020703;
+  --color-dark-900: #010401;
+
+  /* Semantic text colors */
+  --color-muted: #86b89e;
+  --color-dim: #5a8a72;
+
+  /* Typography */
+  --font-sans: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, monospace;
+}
+
+body {
+  background-color: var(--color-dark-600);
+  color: var(--color-jade-50);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+::selection {
+  background-color: var(--color-jade-600);
+  color: var(--color-jade-50);
+}
+
+/* Dot grid pattern */
+.bg-dot-grid {
+  background-image: radial-gradient(
+    rgba(52, 211, 153, 0.04) 1px,
+    transparent 1px
+  );
+  background-size: 32px 32px;
+}
+
+/* Jade glow effect */
+.jade-glow {
+  background: radial-gradient(
+    600px circle at 50% 50%,
+    rgba(52, 211, 153, 0.12) 0%,
+    rgba(52, 211, 153, 0.04) 40%,
+    transparent 70%
+  );
+}
+
+/* Text glow */
+.text-jade-glow {
+  text-shadow: 0 0 20px rgba(52, 211, 153, 0.5),
+    0 0 60px rgba(52, 211, 153, 0.2);
+}
+
+/* Code block scrollbar */
+pre::-webkit-scrollbar {
+  height: 6px;
+}
+pre::-webkit-scrollbar-track {
+  background: transparent;
+}
+pre::-webkit-scrollbar-thumb {
+  background: var(--color-dim);
+  border-radius: 3px;
+}
