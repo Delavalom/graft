@@ -103,7 +103,7 @@ func (r *DefaultRunner) Run(ctx context.Context, agent *Agent, messages []Messag
 		}
 
 		// Execute tool calls
-		toolResults, handoffAgent, err := r.executeToolCalls(ctx, activeAgent, toolMap, genResult.Message.ToolCalls, cfg.ParallelTools)
+		toolResults, handoffAgent, err := r.executeToolCalls(ctx, activeAgent, toolMap, msgs, genResult.Message.ToolCalls, cfg.ParallelTools)
 		if err != nil {
 			return nil, err
 		}
@@ -159,6 +159,10 @@ func (r *DefaultRunner) buildToolMap(agent *Agent) map[string]Tool {
 		name := "handoff_" + h.Target.Name
 		m[name] = &handoffTool{handoff: h, name: name}
 	}
+	for _, s := range agent.SubAgents {
+		name := "subagent_" + s.Agent.Name
+		m[name] = &subagentTool{sub: s, name: name, runner: r}
+	}
 	return m
 }
 
@@ -170,7 +174,7 @@ func (r *DefaultRunner) buildToolDefs(toolMap map[string]Tool) []ToolDefinition 
 	return defs
 }
 
-func (r *DefaultRunner) executeToolCalls(ctx context.Context, agent *Agent, toolMap map[string]Tool, calls []ToolCall, parallel bool) ([]ToolResult, *Agent, error) {
+func (r *DefaultRunner) executeToolCalls(ctx context.Context, agent *Agent, toolMap map[string]Tool, msgs []Message, calls []ToolCall, parallel bool) ([]ToolResult, *Agent, error) {
 	results := make([]ToolResult, len(calls))
 	var handoffAgent *Agent
 
@@ -183,7 +187,7 @@ func (r *DefaultRunner) executeToolCalls(ctx context.Context, agent *Agent, tool
 			wg.Add(1)
 			go func(idx int, tc ToolCall) {
 				defer wg.Done()
-				tr, ha, err := r.executeSingleTool(ctx, agent, toolMap, tc)
+				tr, ha, err := r.executeSingleTool(ctx, agent, toolMap, msgs, tc)
 				mu.Lock()
 				defer mu.Unlock()
 				if err != nil && firstErr == nil {
@@ -201,7 +205,7 @@ func (r *DefaultRunner) executeToolCalls(ctx context.Context, agent *Agent, tool
 		}
 	} else {
 		for i, call := range calls {
-			tr, ha, err := r.executeSingleTool(ctx, agent, toolMap, call)
+			tr, ha, err := r.executeSingleTool(ctx, agent, toolMap, msgs, call)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -215,7 +219,7 @@ func (r *DefaultRunner) executeToolCalls(ctx context.Context, agent *Agent, tool
 	return results, handoffAgent, nil
 }
 
-func (r *DefaultRunner) executeSingleTool(ctx context.Context, agent *Agent, toolMap map[string]Tool, call ToolCall) (ToolResult, *Agent, error) {
+func (r *DefaultRunner) executeSingleTool(ctx context.Context, agent *Agent, toolMap map[string]Tool, msgs []Message, call ToolCall) (ToolResult, *Agent, error) {
 	tool, ok := toolMap[call.Name]
 	if !ok {
 		return ToolResult{CallID: call.ID, Content: fmt.Sprintf("unknown tool: %s", call.Name), IsError: true}, nil, nil
@@ -230,6 +234,22 @@ func (r *DefaultRunner) executeSingleTool(ctx context.Context, agent *Agent, too
 		if hookResult != nil && hookResult.Allow != nil && !*hookResult.Allow {
 			return ToolResult{CallID: call.ID, Content: "tool call denied by hook", IsError: true}, nil, nil
 		}
+	}
+
+	// Handle subagent: run child agent with (optionally mapped) parent messages
+	if st, ok := tool.(*subagentTool); ok {
+		res, _ := RunSubAgent(ctx, r, st.sub, msgs)
+		if res.Error != nil {
+			if agent.Hooks != nil {
+				agent.Hooks.Run(ctx, &HookPayload{Event: HookToolCallError, Agent: agent, ToolCall: &call})
+			}
+			return ToolResult{CallID: call.ID, Content: res.Error.Error(), IsError: true}, nil, nil
+		}
+		text := res.Result.LastAssistantText()
+		if agent.Hooks != nil {
+			agent.Hooks.Run(ctx, &HookPayload{Event: HookPostToolCall, Agent: agent, ToolCall: &call})
+		}
+		return ToolResult{CallID: call.ID, Content: text}, nil, nil
 	}
 
 	output, err := tool.Execute(ctx, call.Arguments)
@@ -279,4 +299,22 @@ func (h *handoffTool) Description() string     { return h.handoff.Description }
 func (h *handoffTool) Schema() json.RawMessage { return json.RawMessage(`{"type":"object"}`) }
 func (h *handoffTool) Execute(ctx context.Context, params json.RawMessage) (any, error) {
 	return fmt.Sprintf("Handing off to %s", h.handoff.Target.Name), nil
+}
+
+// subagentTool is a pseudo-tool that wraps a SubAgent for registration in the tool map.
+// Actual execution is handled in executeSingleTool to pass the current message context.
+type subagentTool struct {
+	sub    *SubAgent
+	name   string
+	runner Runner
+}
+
+func (s *subagentTool) Name() string        { return s.name }
+func (s *subagentTool) Description() string { return s.sub.Description }
+func (s *subagentTool) Schema() json.RawMessage {
+	return json.RawMessage(`{"type":"object","description":"Input for subagent (messages are provided automatically)"}`)
+}
+func (s *subagentTool) Execute(ctx context.Context, params json.RawMessage) (any, error) {
+	// Execution is intercepted in executeSingleTool before reaching here.
+	return nil, nil
 }

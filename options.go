@@ -34,6 +34,10 @@ func WithHandoffs(handoffs ...Handoff) AgentOption {
 	return func(a *Agent) { a.Handoffs = append(a.Handoffs, handoffs...) }
 }
 
+func WithSubAgents(subs ...*SubAgent) AgentOption {
+	return func(a *Agent) { a.SubAgents = append(a.SubAgents, subs...) }
+}
+
 func WithHooks(hooks *HookRegistry) AgentOption {
 	return func(a *Agent) { a.Hooks = hooks }
 }

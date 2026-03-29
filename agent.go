@@ -22,6 +22,7 @@ type Agent struct {
 	ToolChoice   ToolChoice
 	Guardrails   []Guardrail
 	Handoffs     []Handoff
+	SubAgents    []*SubAgent
 	Hooks        *HookRegistry
 	Metadata     map[string]any
 }
