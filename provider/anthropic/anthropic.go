@@ -274,7 +274,7 @@ func (c *Client) Generate(ctx context.Context, params graft.GenerateParams) (*gr
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("anthropic: unexpected status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, graft.NewProviderError(resp.StatusCode, "anthropic", respBytes)
 	}
 
 	var apiResp anthropicResponse

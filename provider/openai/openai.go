@@ -283,7 +283,7 @@ func (c *Client) Generate(ctx context.Context, params graft.GenerateParams) (*gr
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("openai: unexpected status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, graft.NewProviderError(resp.StatusCode, "openai", respBytes)
 	}
 
 	var apiResp openAIResponse
@@ -346,7 +346,7 @@ func (c *Client) Stream(ctx context.Context, params graft.GenerateParams) (<-cha
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
-		return nil, fmt.Errorf("openai: unexpected status %d: %s", resp.StatusCode, string(body))
+		return nil, graft.NewProviderError(resp.StatusCode, "openai", body)
 	}
 
 	ch := make(chan graft.StreamChunk)

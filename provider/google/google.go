@@ -223,7 +223,7 @@ func (c *Client) Generate(ctx context.Context, params graft.GenerateParams) (*gr
 	}
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("google: unexpected status %d: %s", resp.StatusCode, string(respBytes))
+		return nil, graft.NewProviderError(resp.StatusCode, "google", respBytes)
 	}
 
 	var apiResp geminiResponse
