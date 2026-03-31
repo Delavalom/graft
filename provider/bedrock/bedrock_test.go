@@ -645,3 +645,158 @@ func TestNew_WithCustomHeaders(t *testing.T) {
 		t.Errorf("X-Custom-Header = %q, want %q", capturedHeader, "custom-value")
 	}
 }
+
+// --- Stream Tests ---
+
+func TestStream_TextDeltas(t *testing.T) {
+	var capturedPath string
+
+	// Build event stream binary response.
+	var streamBody bytes.Buffer
+	streamBody.Write(encodeEventStreamFrame("messageStart", []byte(`{"role":"assistant"}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockStart", []byte(`{"contentBlockIndex":0,"start":{}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockDelta", []byte(`{"contentBlockIndex":0,"delta":{"text":"Hello"}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockDelta", []byte(`{"contentBlockIndex":0,"delta":{"text":" world"}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockStop", []byte(`{"contentBlockIndex":0}`)))
+	streamBody.Write(encodeEventStreamFrame("messageStop", []byte(`{"stopReason":"end_turn"}`)))
+	streamBody.Write(encodeEventStreamFrame("metadata", []byte(`{"usage":{"inputTokens":10,"outputTokens":5}}`)))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		capturedPath = r.URL.Path
+		w.Header().Set("Content-Type", "application/vnd.amazon.eventstream")
+		w.WriteHeader(http.StatusOK)
+		w.Write(streamBody.Bytes())
+	}))
+	defer srv.Close()
+
+	client := New(
+		WithBaseURL(srv.URL),
+		WithModel("anthropic.claude-3-5-sonnet-20241022-v2:0"),
+		WithAnonymousAuth(),
+	)
+
+	ch, err := client.Stream(context.Background(), graft.GenerateParams{
+		Messages: []graft.Message{{Role: graft.RoleUser, Content: "Hi"}},
+	})
+	if err != nil {
+		t.Fatalf("Stream failed: %v", err)
+	}
+
+	var textParts []string
+	var finalUsage *graft.Usage
+	for chunk := range ch {
+		if chunk.Delta.Type == graft.EventTextDelta {
+			textParts = append(textParts, chunk.Delta.Data.(string))
+		}
+		if chunk.Usage != nil {
+			finalUsage = chunk.Usage
+		}
+	}
+
+	// Verify path contains converse-stream.
+	if !strings.Contains(capturedPath, "/converse-stream") {
+		t.Errorf("path should contain /converse-stream, got %q", capturedPath)
+	}
+
+	// Verify joined text.
+	joined := strings.Join(textParts, "")
+	if joined != "Hello world" {
+		t.Errorf("joined text = %q, want %q", joined, "Hello world")
+	}
+
+	// Verify usage.
+	if finalUsage == nil {
+		t.Fatal("expected usage in stream, got nil")
+	}
+	if finalUsage.PromptTokens != 10 {
+		t.Errorf("PromptTokens = %d, want 10", finalUsage.PromptTokens)
+	}
+	if finalUsage.CompletionTokens != 5 {
+		t.Errorf("CompletionTokens = %d, want 5", finalUsage.CompletionTokens)
+	}
+}
+
+func TestStream_WithToolCall(t *testing.T) {
+	var streamBody bytes.Buffer
+	streamBody.Write(encodeEventStreamFrame("messageStart", []byte(`{"role":"assistant"}`)))
+	// Text block (index 0).
+	streamBody.Write(encodeEventStreamFrame("contentBlockStart", []byte(`{"contentBlockIndex":0,"start":{}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockDelta", []byte(`{"contentBlockIndex":0,"delta":{"text":"Checking..."}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockStop", []byte(`{"contentBlockIndex":0}`)))
+	// Tool use block (index 1).
+	streamBody.Write(encodeEventStreamFrame("contentBlockStart", []byte(`{"contentBlockIndex":1,"start":{"toolUse":{"toolUseId":"tu_123","name":"get_weather"}}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockDelta", []byte(`{"contentBlockIndex":1,"delta":{"toolUse":{"input":"{\"city\":"}}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockDelta", []byte(`{"contentBlockIndex":1,"delta":{"toolUse":{"input":"\"NYC\"}"}}}`)))
+	streamBody.Write(encodeEventStreamFrame("contentBlockStop", []byte(`{"contentBlockIndex":1}`)))
+	streamBody.Write(encodeEventStreamFrame("messageStop", []byte(`{"stopReason":"tool_use"}`)))
+	streamBody.Write(encodeEventStreamFrame("metadata", []byte(`{"usage":{"inputTokens":20,"outputTokens":15}}`)))
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/vnd.amazon.eventstream")
+		w.WriteHeader(http.StatusOK)
+		w.Write(streamBody.Bytes())
+	}))
+	defer srv.Close()
+
+	client := New(
+		WithBaseURL(srv.URL),
+		WithModel("test-model"),
+		WithAnonymousAuth(),
+	)
+
+	ch, err := client.Stream(context.Background(), graft.GenerateParams{
+		Messages: []graft.Message{{Role: graft.RoleUser, Content: "Weather in NYC?"}},
+	})
+	if err != nil {
+		t.Fatalf("Stream failed: %v", err)
+	}
+
+	var eventTypes []graft.EventType
+	for chunk := range ch {
+		eventTypes = append(eventTypes, chunk.Delta.Type)
+	}
+
+	// Verify we got the expected event types.
+	wantEvents := map[graft.EventType]bool{
+		graft.EventTextDelta:     false,
+		graft.EventToolCallStart: false,
+		graft.EventToolCallDelta: false,
+		graft.EventToolCallDone:  false,
+		graft.EventMessageDone:   false,
+		graft.EventDone:          false,
+	}
+	for _, et := range eventTypes {
+		if _, ok := wantEvents[et]; ok {
+			wantEvents[et] = true
+		}
+	}
+	for et, found := range wantEvents {
+		if !found {
+			t.Errorf("expected event type %q not found in stream", et)
+		}
+	}
+}
+
+func TestStream_HTTPError(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusForbidden)
+		w.Write([]byte(`{"message":"Access denied"}`))
+	}))
+	defer srv.Close()
+
+	client := New(
+		WithBaseURL(srv.URL),
+		WithModel("test-model"),
+		WithAnonymousAuth(),
+	)
+
+	_, err := client.Stream(context.Background(), graft.GenerateParams{
+		Messages: []graft.Message{{Role: graft.RoleUser, Content: "Hi"}},
+	})
+	if err == nil {
+		t.Fatal("expected error for 403 response, got nil")
+	}
+	if !strings.Contains(err.Error(), "403") {
+		t.Errorf("error should mention status code 403, got: %v", err)
+	}
+}
