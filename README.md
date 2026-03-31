@@ -85,6 +85,7 @@ User messages -> Agent -> Runner.Run() -> LanguageModel.Generate()
 | `provider/openai` | OpenAI, OpenRouter, Ollama, LM Studio |
 | `provider/anthropic` | Anthropic Messages API |
 | `provider/google` | Google Generative Language API (Gemini) |
+| `provider/bedrock` | AWS Bedrock (Converse API) — Claude, Titan, Llama, Mistral |
 | `provider` | Router (fallback/round-robin) and middleware chain |
 | `guardrail` | Built-in guardrails: MaxTokens, ContentFilter, SchemaValidator |
 | `mcp` | Model Context Protocol client and server |
@@ -114,6 +115,7 @@ User messages -> Agent -> Runner.Run() -> LanguageModel.Generate()
 | [temporal](examples/temporal/) | Durable execution with Temporal |
 | [hatchet](examples/hatchet/) | Durable functions with Hatchet |
 | [trigger](examples/trigger/) | Background tasks with Trigger.dev |
+| [bedrock](examples/bedrock/) | AWS Bedrock with Converse API |
 
 Run any example:
 
