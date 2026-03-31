@@ -31,10 +31,10 @@ func WithRetryPolicy(p *RetryPolicy) Option {
 
 // RetryPolicy configures retry behavior for Temporal activities.
 type RetryPolicy struct {
-	MaxAttempts        int
-	InitialInterval    time.Duration
-	BackoffCoefficient float64
-	MaxInterval        time.Duration
+	MaxAttempts        int           `json:"max_attempts"`
+	InitialInterval    time.Duration `json:"initial_interval"`
+	BackoffCoefficient float64       `json:"backoff_coefficient"`
+	MaxInterval        time.Duration `json:"max_interval"`
 }
 
 // DefaultRetryPolicy returns a sensible default retry policy.
@@ -49,10 +49,13 @@ func DefaultRetryPolicy() *RetryPolicy {
 
 // WorkflowConfig holds workflow-level settings.
 type WorkflowConfig struct {
-	MaxIterations int
-	Timeout       time.Duration
-	TaskQueue     string
-	RetryPolicy   *RetryPolicy
+	MaxIterations       int           `json:"max_iterations,omitempty"`
+	Timeout             time.Duration `json:"timeout,omitempty"`
+	TaskQueue           string        `json:"task_queue,omitempty"`
+	RetryPolicy         *RetryPolicy  `json:"retry_policy,omitempty"`
+	GenerateTimeout     time.Duration `json:"generate_timeout,omitempty"`
+	ToolTimeout         time.Duration `json:"tool_timeout,omitempty"`
+	ApprovalRequiredFor []string      `json:"approval_required_for,omitempty"`
 }
 
 // ActivityConfig holds activity-level settings.

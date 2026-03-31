@@ -1,5 +1,7 @@
 package temporal
 
+import "github.com/delavalom/graft"
+
 // This file contains the workflow and activity function signatures.
 // In production, users register these with their Temporal worker.
 // The actual workflow logic runs inside Temporal's deterministic sandbox.
@@ -46,6 +48,15 @@ type ToolActivityInput struct {
 type ToolActivityOutput struct {
 	Result  []byte `json:"result"`   // JSON-encoded result
 	IsError bool   `json:"is_error"`
+}
+
+// HandoffConfig contains serializable handoff metadata for workflow ContinueAsNew.
+type HandoffConfig struct {
+	ToolName        string                `json:"tool_name"`
+	AgentName       string                `json:"agent_name"`
+	Instructions    string                `json:"instructions"`
+	Model           string                `json:"model,omitempty"`
+	ToolDefinitions []graft.ToolDefinition `json:"tool_definitions,omitempty"`
 }
 
 // SignalApproval is the signal payload for human-in-the-loop approval.

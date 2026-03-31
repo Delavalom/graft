@@ -30,12 +30,14 @@ func NewTemporalRunner(client TemporalClient, opts ...Option) *TemporalRunner {
 
 // WorkflowInput is the serializable input for the agent workflow.
 type WorkflowInput struct {
-	AgentName    string             `json:"agent_name"`
-	Instructions string             `json:"instructions"`
-	Model        string             `json:"model"`
-	ToolNames    []string           `json:"tool_names"`
-	Messages     []graft.Message    `json:"messages"`
-	Config       WorkflowConfig     `json:"config"`
+	AgentName       string                `json:"agent_name"`
+	Instructions    string                `json:"instructions"`
+	Model           string                `json:"model"`
+	ToolNames       []string              `json:"tool_names"`
+	ToolDefinitions []graft.ToolDefinition `json:"tool_definitions,omitempty"`
+	Messages        []graft.Message       `json:"messages"`
+	Config          WorkflowConfig        `json:"config"`
+	Handoffs        []HandoffConfig       `json:"handoffs,omitempty"`
 }
 
 // WorkflowOutput is the serializable output from the agent workflow.
@@ -52,21 +54,41 @@ func (r *TemporalRunner) Run(ctx context.Context, agent *graft.Agent, messages [
 	}
 
 	toolNames := make([]string, len(agent.Tools))
+	toolDefs := make([]graft.ToolDefinition, len(agent.Tools))
 	for i, t := range agent.Tools {
 		toolNames[i] = t.Name()
+		toolDefs[i] = graft.ToolDefFromTool(t)
+	}
+
+	// Build handoff configs from agent handoffs
+	var handoffs []HandoffConfig
+	for _, h := range agent.Handoffs {
+		hToolDefs := make([]graft.ToolDefinition, len(h.Target.Tools))
+		for i, t := range h.Target.Tools {
+			hToolDefs[i] = graft.ToolDefFromTool(t)
+		}
+		handoffs = append(handoffs, HandoffConfig{
+			ToolName:        "handoff_" + h.Target.Name,
+			AgentName:       h.Target.Name,
+			Instructions:    h.Target.Instructions,
+			Model:           h.Target.Model,
+			ToolDefinitions: hToolDefs,
+		})
 	}
 
 	input := WorkflowInput{
-		AgentName:    agent.Name,
-		Instructions: agent.Instructions,
-		Model:        agent.Model,
-		ToolNames:    toolNames,
-		Messages:     messages,
+		AgentName:       agent.Name,
+		Instructions:    agent.Instructions,
+		Model:           agent.Model,
+		ToolNames:       toolNames,
+		ToolDefinitions: toolDefs,
+		Messages:        messages,
 		Config: WorkflowConfig{
 			MaxIterations: cfg.MaxIterations,
 			TaskQueue:     r.cfg.taskQueue,
 			RetryPolicy:   r.cfg.retryPolicy,
 		},
+		Handoffs: handoffs,
 	}
 
 	workflowID := r.cfg.workflowID
