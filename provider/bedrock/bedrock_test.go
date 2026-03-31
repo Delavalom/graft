@@ -1,180 +1,196 @@
 package bedrock
 
 import (
-	"bytes"
-	"io"
-	"net/http"
-	"strings"
+	"encoding/json"
 	"testing"
+
+	"github.com/delavalom/graft"
 )
 
-func TestSignRequest_SetsRequiredHeaders(t *testing.T) {
-	req, err := http.NewRequest("POST", "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	creds := credentials{
-		accessKey: "AKIAIOSFODNN7EXAMPLE",
-		secretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+func TestConvertMessages_SystemExtracted(t *testing.T) {
+	msgs := []graft.Message{
+		{Role: graft.RoleSystem, Content: "You are helpful."},
+		{Role: graft.RoleUser, Content: "Hello"},
+		{Role: graft.RoleSystem, Content: "Be concise."},
 	}
 
-	signRequest(req, []byte(`{}`), creds, "us-east-1")
+	system, out := convertMessages(msgs)
 
-	auth := req.Header.Get("Authorization")
-	if auth == "" {
-		t.Fatal("Authorization header not set")
+	if len(system) != 2 {
+		t.Fatalf("expected 2 system blocks, got %d", len(system))
 	}
-	if !strings.HasPrefix(auth, "AWS4-HMAC-SHA256") {
-		t.Errorf("Authorization header should have AWS4-HMAC-SHA256 prefix, got: %s", auth)
+	if system[0].Text != "You are helpful." {
+		t.Errorf("system[0].Text = %q, want %q", system[0].Text, "You are helpful.")
 	}
-	if !strings.Contains(auth, creds.accessKey) {
-		t.Errorf("Authorization header should contain access key, got: %s", auth)
-	}
-	if !strings.Contains(auth, "us-east-1/bedrock/aws4_request") {
-		t.Errorf("Authorization header should contain region/service scope, got: %s", auth)
+	if system[1].Text != "Be concise." {
+		t.Errorf("system[1].Text = %q, want %q", system[1].Text, "Be concise.")
 	}
 
-	amzDate := req.Header.Get("X-Amz-Date")
-	if amzDate == "" {
-		t.Fatal("X-Amz-Date header not set")
+	if len(out) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(out))
 	}
-	if len(amzDate) != 16 {
-		t.Errorf("X-Amz-Date should be 16 chars, got %d: %s", len(amzDate), amzDate)
+	if out[0].Role != "user" {
+		t.Errorf("out[0].Role = %q, want %q", out[0].Role, "user")
 	}
-	if amzDate[8] != 'T' {
-		t.Errorf("X-Amz-Date should have T at position 8, got: %s", amzDate)
-	}
-	if amzDate[15] != 'Z' {
-		t.Errorf("X-Amz-Date should have Z at position 15, got: %s", amzDate)
+	if out[0].Content[0].Text != "Hello" {
+		t.Errorf("out[0].Content[0].Text = %q, want %q", out[0].Content[0].Text, "Hello")
 	}
 }
 
-func TestSignRequest_WithSessionToken(t *testing.T) {
-	req, err := http.NewRequest("POST", "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke", nil)
-	if err != nil {
-		t.Fatal(err)
-	}
-	req.Header.Set("Content-Type", "application/json")
-
-	creds := credentials{
-		accessKey:    "AKIAIOSFODNN7EXAMPLE",
-		secretKey:    "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
-		sessionToken: "FwoGZXIvYXdzEBYaDHqa0AP",
-	}
-
-	signRequest(req, []byte(`{}`), creds, "us-east-1")
-
-	token := req.Header.Get("X-Amz-Security-Token")
-	if token != creds.sessionToken {
-		t.Errorf("X-Amz-Security-Token should be %q, got %q", creds.sessionToken, token)
+func TestConvertMessages_AssistantWithToolCalls(t *testing.T) {
+	msgs := []graft.Message{
+		{
+			Role:    graft.RoleAssistant,
+			Content: "Let me search for that.",
+			ToolCalls: []graft.ToolCall{
+				{
+					ID:        "call_123",
+					Name:      "search",
+					Arguments: json.RawMessage(`{"query":"golang"}`),
+				},
+			},
+		},
 	}
 
-	auth := req.Header.Get("Authorization")
-	if !strings.Contains(auth, "x-amz-security-token") {
-		t.Errorf("signed headers should include x-amz-security-token, got: %s", auth)
-	}
-}
+	_, out := convertMessages(msgs)
 
-func TestSignRequest_DeterministicSignature(t *testing.T) {
-	body := []byte(`{"prompt":"hello"}`)
-	creds := credentials{
-		accessKey: "AKIAIOSFODNN7EXAMPLE",
-		secretKey: "wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY",
+	if len(out) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(out))
 	}
-	fixedDate := "20240101T120000Z"
-
-	makeReq := func() *http.Request {
-		req, err := http.NewRequest("POST", "https://bedrock-runtime.us-east-1.amazonaws.com/model/anthropic.claude-v2/invoke", nil)
-		if err != nil {
-			t.Fatal(err)
-		}
-		req.Header.Set("Content-Type", "application/json")
-		req.Header.Set("X-Amz-Date", fixedDate)
-		return req
+	msg := out[0]
+	if msg.Role != "assistant" {
+		t.Errorf("role = %q, want %q", msg.Role, "assistant")
+	}
+	if len(msg.Content) != 2 {
+		t.Fatalf("expected 2 content blocks, got %d", len(msg.Content))
 	}
 
-	req1 := makeReq()
-	signRequest(req1, body, creds, "us-east-1")
+	// First block: text
+	if msg.Content[0].Text != "Let me search for that." {
+		t.Errorf("text block = %q, want %q", msg.Content[0].Text, "Let me search for that.")
+	}
 
-	req2 := makeReq()
-	signRequest(req2, body, creds, "us-east-1")
-
-	auth1 := req1.Header.Get("Authorization")
-	auth2 := req2.Header.Get("Authorization")
-
-	if auth1 != auth2 {
-		t.Errorf("signatures should be deterministic\nfirst:  %s\nsecond: %s", auth1, auth2)
+	// Second block: toolUse
+	tu := msg.Content[1].ToolUse
+	if tu == nil {
+		t.Fatal("expected toolUse block, got nil")
+	}
+	if tu.ToolUseID != "call_123" {
+		t.Errorf("toolUseId = %q, want %q", tu.ToolUseID, "call_123")
+	}
+	if tu.Name != "search" {
+		t.Errorf("name = %q, want %q", tu.Name, "search")
+	}
+	if string(tu.Input) != `{"query":"golang"}` {
+		t.Errorf("input = %s, want %s", tu.Input, `{"query":"golang"}`)
 	}
 }
 
-func TestEventStreamDecoder_SingleEvent(t *testing.T) {
-	payload := []byte(`{"role":"assistant"}`)
-	frame := encodeEventStreamFrame("messageStart", payload)
+func TestConvertMessages_ToolResult(t *testing.T) {
+	msgs := []graft.Message{
+		{
+			Role: graft.RoleTool,
+			ToolResult: &graft.ToolResult{
+				CallID:  "call_123",
+				Content: "search results here",
+				IsError: false,
+			},
+		},
+	}
 
-	dec := newEventStreamDecoder(bytes.NewReader(frame))
-	eventType, got, err := dec.readEvent()
-	if err != nil {
-		t.Fatalf("readEvent() error: %v", err)
+	_, out := convertMessages(msgs)
+
+	if len(out) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(out))
 	}
-	if eventType != "messageStart" {
-		t.Errorf("eventType = %q, want %q", eventType, "messageStart")
+	msg := out[0]
+	if msg.Role != "user" {
+		t.Errorf("role = %q, want %q", msg.Role, "user")
 	}
-	if !bytes.Equal(got, payload) {
-		t.Errorf("payload = %q, want %q", got, payload)
+
+	tr := msg.Content[0].ToolResult
+	if tr == nil {
+		t.Fatal("expected toolResult block, got nil")
+	}
+	if tr.ToolUseID != "call_123" {
+		t.Errorf("toolUseId = %q, want %q", tr.ToolUseID, "call_123")
+	}
+	if tr.Status != "success" {
+		t.Errorf("status = %q, want %q", tr.Status, "success")
+	}
+	if len(tr.Content) != 1 || tr.Content[0].Text != "search results here" {
+		t.Errorf("content text = %q, want %q", tr.Content[0].Text, "search results here")
 	}
 }
 
-func TestEventStreamDecoder_MultipleEvents(t *testing.T) {
-	events := []struct {
-		eventType string
-		payload   []byte
-	}{
-		{"messageStart", []byte(`{"role":"assistant"}`)},
-		{"contentBlockDelta", []byte(`{"delta":{"text":"hello"}}`)},
-		{"messageStop", []byte(`{"stop_reason":"end_turn"}`)},
+func TestConvertMessages_ToolResultError(t *testing.T) {
+	msgs := []graft.Message{
+		{
+			Role: graft.RoleTool,
+			ToolResult: &graft.ToolResult{
+				CallID:  "call_456",
+				Content: "something went wrong",
+				IsError: true,
+			},
+		},
 	}
 
-	var buf bytes.Buffer
-	for _, e := range events {
-		buf.Write(encodeEventStreamFrame(e.eventType, e.payload))
+	_, out := convertMessages(msgs)
+
+	if len(out) != 1 {
+		t.Fatalf("expected 1 message, got %d", len(out))
 	}
 
-	dec := newEventStreamDecoder(&buf)
-	for i, want := range events {
-		eventType, payload, err := dec.readEvent()
-		if err != nil {
-			t.Fatalf("event %d: readEvent() error: %v", i, err)
-		}
-		if eventType != want.eventType {
-			t.Errorf("event %d: eventType = %q, want %q", i, eventType, want.eventType)
-		}
-		if !bytes.Equal(payload, want.payload) {
-			t.Errorf("event %d: payload = %q, want %q", i, payload, want.payload)
-		}
+	tr := out[0].Content[0].ToolResult
+	if tr == nil {
+		t.Fatal("expected toolResult block, got nil")
 	}
-
-	// Verify EOF after last event.
-	_, _, err := dec.readEvent()
-	if err != io.EOF {
-		t.Errorf("after last event: err = %v, want io.EOF", err)
+	if tr.Status != "error" {
+		t.Errorf("status = %q, want %q", tr.Status, "error")
+	}
+	if tr.ToolUseID != "call_456" {
+		t.Errorf("toolUseId = %q, want %q", tr.ToolUseID, "call_456")
 	}
 }
 
-func TestEventStreamDecoder_EmptyPayload(t *testing.T) {
-	payload := []byte(`{}`)
-	frame := encodeEventStreamFrame("contentBlockStop", payload)
+func TestConvertTools(t *testing.T) {
+	tools := []graft.ToolDefinition{
+		{
+			Name:        "search",
+			Description: "Search the web",
+			Schema:      json.RawMessage(`{"type":"object","properties":{"query":{"type":"string"}}}`),
+		},
+	}
 
-	dec := newEventStreamDecoder(bytes.NewReader(frame))
-	eventType, got, err := dec.readEvent()
-	if err != nil {
-		t.Fatalf("readEvent() error: %v", err)
+	out := convertTools(tools)
+
+	if len(out) != 1 {
+		t.Fatalf("expected 1 tool, got %d", len(out))
 	}
-	if eventType != "contentBlockStop" {
-		t.Errorf("eventType = %q, want %q", eventType, "contentBlockStop")
+
+	spec := out[0].ToolSpec
+	if spec.Name != "search" {
+		t.Errorf("name = %q, want %q", spec.Name, "search")
 	}
-	if !bytes.Equal(got, payload) {
-		t.Errorf("payload = %q, want %q", got, payload)
+	if spec.Description != "Search the web" {
+		t.Errorf("description = %q, want %q", spec.Description, "Search the web")
+	}
+
+	// inputSchema.json should wrap the original schema
+	expectedSchema := `{"type":"object","properties":{"query":{"type":"string"}}}`
+	if string(spec.InputSchema.JSON) != expectedSchema {
+		t.Errorf("inputSchema.json = %s, want %s", spec.InputSchema.JSON, expectedSchema)
+	}
+}
+
+func TestConvertTools_Empty(t *testing.T) {
+	out := convertTools(nil)
+	if out != nil {
+		t.Errorf("expected nil, got %v", out)
+	}
+
+	out = convertTools([]graft.ToolDefinition{})
+	if out != nil {
+		t.Errorf("expected nil for empty slice, got %v", out)
 	}
 }
