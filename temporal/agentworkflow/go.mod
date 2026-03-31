@@ -1,6 +1,6 @@
 module github.com/delavalom/graft/temporal/agentworkflow
 
-go 1.25.0
+go 1.24.0
 
 require github.com/delavalom/graft v0.2.0
 
@@ -16,7 +16,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/robfig/cron v1.2.0 // indirect
 	github.com/stretchr/objx v0.5.2 // indirect
-	github.com/stretchr/testify v1.10.0 // indirect
+	github.com/stretchr/testify v1.10.0
 	go.temporal.io/api v1.62.2 // indirect
 	go.temporal.io/sdk v1.41.1
 	golang.org/x/net v0.39.0 // indirect

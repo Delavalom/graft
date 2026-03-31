@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What is Graft
 
-Graft is a Go-native framework for building AI agents and LLM-powered applications. Module path: `github.com/delavalom/graft`. Go 1.25+. Only external dependency is OpenTelemetry.
+Graft is a Go-native framework for building AI agents and LLM-powered applications. Module path: `github.com/delavalom/graft`. Go 1.24+. Only external dependency is OpenTelemetry.
 
 ## Commands
 

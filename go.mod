@@ -1,11 +1,11 @@
 module github.com/delavalom/graft
 
-go 1.25.0
+go 1.24.0
 
 require (
-	go.opentelemetry.io/otel v1.42.0
-	go.opentelemetry.io/otel/metric v1.42.0
-	go.opentelemetry.io/otel/trace v1.42.0
+	go.opentelemetry.io/otel v1.41.0
+	go.opentelemetry.io/otel/metric v1.41.0
+	go.opentelemetry.io/otel/trace v1.41.0
 )
 
 require (
