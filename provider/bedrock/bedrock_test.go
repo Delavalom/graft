@@ -159,6 +159,42 @@ func TestConvertMessages_ToolResultError(t *testing.T) {
 	}
 }
 
+func TestConvertMessages_MultipleToolResultsMerged(t *testing.T) {
+	msgs := []graft.Message{
+		{Role: graft.RoleUser, Content: "hello"},
+		{
+			Role: graft.RoleAssistant,
+			ToolCalls: []graft.ToolCall{
+				{ID: "call_1", Name: "tool_a", Arguments: json.RawMessage(`{}`)},
+				{ID: "call_2", Name: "tool_b", Arguments: json.RawMessage(`{}`)},
+			},
+		},
+		{Role: graft.RoleTool, ToolResult: &graft.ToolResult{CallID: "call_1", Content: "result A"}},
+		{Role: graft.RoleTool, ToolResult: &graft.ToolResult{CallID: "call_2", Content: "result B"}},
+	}
+
+	_, out := convertMessages(msgs)
+
+	// Should produce exactly 3 Bedrock messages: user, assistant, user (merged tool results).
+	if len(out) != 3 {
+		t.Fatalf("expected 3 messages, got %d", len(out))
+	}
+
+	toolResultMsg := out[2]
+	if toolResultMsg.Role != "user" {
+		t.Errorf("role = %q, want %q", toolResultMsg.Role, "user")
+	}
+	if len(toolResultMsg.Content) != 2 {
+		t.Fatalf("expected 2 toolResult blocks in merged message, got %d", len(toolResultMsg.Content))
+	}
+	if toolResultMsg.Content[0].ToolResult.ToolUseID != "call_1" {
+		t.Errorf("first toolResult ID = %q, want %q", toolResultMsg.Content[0].ToolResult.ToolUseID, "call_1")
+	}
+	if toolResultMsg.Content[1].ToolResult.ToolUseID != "call_2" {
+		t.Errorf("second toolResult ID = %q, want %q", toolResultMsg.Content[1].ToolResult.ToolUseID, "call_2")
+	}
+}
+
 func TestConvertTools(t *testing.T) {
 	tools := []graft.ToolDefinition{
 		{

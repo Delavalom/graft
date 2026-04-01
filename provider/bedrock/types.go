@@ -181,10 +181,19 @@ func convertMessages(msgs []graft.Message) ([]systemBlock, []converseMessage) {
 						Status:    status,
 					},
 				}
-				out = append(out, converseMessage{
-					Role:    "user",
-					Content: []contentBlock{block},
-				})
+
+				// Merge consecutive tool results into one "user" message.
+				// Bedrock requires all toolResult blocks from a multi-tool-call
+				// assistant turn to appear in a single "user" message.
+				if n := len(out); n > 0 && out[n-1].Role == "user" &&
+					len(out[n-1].Content) > 0 && out[n-1].Content[0].ToolResult != nil {
+					out[n-1].Content = append(out[n-1].Content, block)
+				} else {
+					out = append(out, converseMessage{
+						Role:    "user",
+						Content: []contentBlock{block},
+					})
+				}
 			}
 
 		case graft.RoleAssistant:
