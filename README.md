@@ -1,6 +1,27 @@
 # Graft
 
-A Go-native framework for building AI agents and LLM-powered applications. Zero external SDK dependencies — just `net/http` and OpenTelemetry.
+[![Go Reference](https://pkg.go.dev/badge/github.com/delavalom/graft.svg)](https://pkg.go.dev/github.com/delavalom/graft)
+[![Go Report Card](https://goreportcard.com/badge/github.com/delavalom/graft)](https://goreportcard.com/report/github.com/delavalom/graft)
+[![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](LICENSE)
+[![CI](https://github.com/delavalom/graft/actions/workflows/ci.yml/badge.svg)](https://github.com/delavalom/graft/actions/workflows/ci.yml)
+
+A Go framework for building AI agents and LLM-powered applications. Multi-provider support (OpenAI, Anthropic, Google Gemini, AWS Bedrock), type-safe tools via generics, agent handoffs, guardrails, MCP integration, and graph orchestration — all with zero vendor SDK dependencies.
+
+## Why Graft?
+
+| | Graft | LangChainGo | Raw API calls |
+|---|---|---|---|
+| **Vendor SDKs** | None — raw `net/http` | Multiple SDKs | You manage HTTP |
+| **Type safety** | Generic tools from Go structs | Runtime casting | Manual parsing |
+| **Agent handoffs** | Built-in, automatic | Manual wiring | DIY |
+| **Providers** | OpenAI, Anthropic, Gemini, Bedrock | Varies by wrapper | One at a time |
+| **Guardrails** | Input, output, and tool validation | Limited | None |
+| **MCP** | Client + server built-in | Not available | Not available |
+| **Graph orchestration** | LangGraph-style DAG execution | Chain-based | None |
+| **Durable execution** | Temporal, Hatchet, Trigger.dev | Not available | DIY |
+| **Dependencies** | Only OpenTelemetry | 50+ transitive deps | Depends |
+
+Graft is inspired by [OpenAI Swarm](https://github.com/openai/swarm) — lightweight, composable, and designed for Go developers who want full control without framework lock-in.
 
 ## Install
 
@@ -156,6 +177,10 @@ base := graft.NewDefaultRunner(model)
 traced := tracing.NewTracedRunner(base, braintrustProvider)
 persistent := state.NewSessionRunner(traced, store, sessionID)
 ```
+
+## Contributing
+
+Contributions are welcome! See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
 ## License
 
