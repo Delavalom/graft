@@ -1,0 +1,41 @@
+---
+title: Overview
+description: Run Graft agents under durable execution engines like Hatchet and Temporal for retries, rate limits, and crash-safe resumption.
+---
+
+# Runtimes
+
+`graft.Runner` is an interface. The default `DefaultRunner` drives the agent loop in-process, but Graft also ships runners that execute the same agents under **durable execution engines** — so LLM calls and tool invocations survive crashes, can be retried on failure, and benefit from engine-level concurrency and rate limiting.
+
+```go
+type Runner interface {
+    Run(ctx context.Context, agent *Agent, messages []Message, opts ...RunOption) (*Result, error)
+    RunStream(ctx context.Context, agent *Agent, messages []Message, opts ...RunOption) (<-chan StreamEvent, error)
+}
+```
+
+Because every runtime returns the same `*Result`, you can swap from `NewDefaultRunner` to `NewHatchetRunner` or `NewTemporalRunner` without touching agent code.
+
+## Available Runtimes
+
+| Runtime | Package | Strengths |
+|---------|---------|-----------|
+| [Hatchet](/docs/runtimes/hatchet) | `hatchet/` | DAG workflows, concurrency control, per-key rate limiting |
+| [Temporal](/docs/runtimes/temporal) | `temporal/` | Per-step durability with activity replay, signals, `ContinueAsNew` for handoffs |
+
+A Trigger.dev backend also exists at `trigger/` with SSE streaming and waitpoints — docs coming soon.
+
+## Zero SDK Dependencies
+
+Graft does not import the Hatchet or Temporal SDKs. Each runtime package defines a small client interface (`HatchetClient`, `TemporalClient`) that mirrors the SDK surface; you inject your real SDK client at construction time. This keeps `go get github.com/delavalom/graft` lean and lets you pin SDK versions independently.
+
+## When to Use a Durable Runtime
+
+Use Hatchet or Temporal when any of the following matter:
+
+- **Long-running agents** where a crash mid-loop would force you to restart from scratch.
+- **Rate-limited providers** where queueing and backoff should be centralized.
+- **Multi-step tool calls** where each step should be independently retryable.
+- **Audit requirements** where every LLM call and tool invocation must be replayable.
+
+For short, request-scoped agent runs, `DefaultRunner` is the right choice.

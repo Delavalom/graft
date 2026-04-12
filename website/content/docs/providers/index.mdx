@@ -1,6 +1,6 @@
 ---
 title: Overview
-description: Graft supports multiple LLM providers out of the box — OpenAI, Anthropic, and Google Gemini — all through raw HTTP with zero SDK dependencies.
+description: Graft supports OpenAI, Anthropic, Google Gemini, AWS Bedrock, and any OpenAI-compatible endpoint — all through raw HTTP with zero SDK dependencies.
 ---
 
 # Providers
@@ -24,7 +24,15 @@ This means you can swap providers without changing your agent code. All provider
 | OpenAI | `provider/openai` | GPT-4o, GPT-4o-mini, o1, o3, etc. |
 | Anthropic | `provider/anthropic` | Claude Sonnet, Claude Opus, Claude Haiku |
 | Google | `provider/google` | Gemini 2.0 Flash, Gemini 2.5 Pro |
+| AWS Bedrock | `provider/bedrock` | Claude, Titan, Llama, Mistral via Converse API |
 | OpenAI-compatible | `provider/openai` | OpenRouter, Ollama, LM Studio, vLLM |
+
+## Choosing a Provider
+
+- **Direct API** — [OpenAI](/docs/providers/openai), [Anthropic](/docs/providers/anthropic), [Google](/docs/providers/google). Simplest path when you already have a vendor API key.
+- **AWS-native** — [Bedrock](/docs/providers/bedrock). Uses SigV4 and the AWS Converse API; good fit inside AWS environments and for Claude/Titan/Llama/Mistral under a single IAM policy.
+- **OpenAI-compatible** — [OpenRouter, Ollama, LM Studio, vLLM](/docs/providers/openai#openai-compatible-apis). Reuse the OpenAI provider with `WithBaseURL` for local models, gateways, and multi-model aggregators.
+- **Custom** — [Write your own](/docs/providers/custom). Implement `LanguageModel` for internal gateways or vendors not listed above.
 
 ## Provider Middleware
 

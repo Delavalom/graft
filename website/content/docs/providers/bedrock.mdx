@@ -1,0 +1,90 @@
+---
+title: AWS Bedrock
+description: Use Claude, Titan, Llama, and Mistral models through AWS Bedrock with native SigV4 signing — no AWS SDK required.
+---
+
+# AWS Bedrock Provider
+
+The Bedrock provider calls the AWS Bedrock Converse API directly over `net/http` with built-in SigV4 signing. Zero AWS SDK dependencies — everything from credentials to streaming is implemented in `provider/bedrock/`.
+
+## Installation
+
+```bash
+go get github.com/delavalom/graft/provider/bedrock
+```
+
+## Basic Usage
+
+```go
+import "github.com/delavalom/graft/provider/bedrock"
+
+model := bedrock.New(
+    bedrock.WithRegion("us-east-1"),
+    bedrock.WithModel("anthropic.claude-sonnet-4-20250514-v1:0"),
+)
+```
+
+Credentials are picked up from the standard AWS environment variables:
+
+| Variable | Purpose |
+|----------|---------|
+| `AWS_ACCESS_KEY_ID` | Access key (required unless anonymous) |
+| `AWS_SECRET_ACCESS_KEY` | Secret key (required unless anonymous) |
+| `AWS_SESSION_TOKEN` | Optional STS session token |
+| `AWS_REGION` | Default region if `WithRegion` is not set |
+
+## Options
+
+```go
+model := bedrock.New(
+    bedrock.WithRegion("us-west-2"),
+    bedrock.WithModel("anthropic.claude-sonnet-4-20250514-v1:0"),
+    bedrock.WithCredentials("AKIA...", "secret"),
+    bedrock.WithSessionToken("token..."),
+    bedrock.WithMaxTokens(4096),
+    bedrock.WithHTTPClient(customClient),
+    bedrock.WithHeader("X-Project", "my-project"),
+)
+```
+
+| Option | Purpose |
+|--------|---------|
+| `WithRegion(string)` | AWS region (e.g. `us-east-1`) |
+| `WithModel(string)` | Default Bedrock model ID |
+| `WithCredentials(access, secret)` | Override env-loaded credentials |
+| `WithSessionToken(string)` | Attach an STS session token |
+| `WithAnonymousAuth()` | Skip SigV4 signing (for unsigned proxies) |
+| `WithBaseURL(string)` | Point at a non-default endpoint |
+| `WithHTTPClient(*http.Client)` | Supply a pre-configured HTTP client |
+| `WithHeader(k, v)` | Attach an extra header on every request |
+| `WithMaxTokens(int)` | Default max output tokens |
+
+## Proxies and Service Meshes
+
+When running behind a service mesh or Bedrock proxy that handles auth upstream, combine `WithBaseURL`, `WithAnonymousAuth`, and `WithHeader`:
+
+```go
+model := bedrock.New(
+    bedrock.WithBaseURL("http://127.0.0.1:19193"),
+    bedrock.WithAnonymousAuth(),
+    bedrock.WithHeader("X-Project", "my-project"),
+    bedrock.WithModel("anthropic.claude-sonnet-4-20250514-v1:0"),
+)
+```
+
+`WithAnonymousAuth` skips SigV4 entirely — the proxy is expected to inject signatures or its own auth.
+
+## Supported Models
+
+The Converse API supports any Bedrock-hosted model family:
+
+- Anthropic Claude (`anthropic.claude-sonnet-4-*`, `anthropic.claude-opus-*`, `anthropic.claude-haiku-*`)
+- Amazon Titan (`amazon.titan-*`)
+- Meta Llama (`meta.llama3-*`)
+- Mistral (`mistral.mistral-*`, `mistral.mixtral-*`)
+
+Provider IDs follow AWS Bedrock conventions — see the [Bedrock model catalog](https://docs.aws.amazon.com/bedrock/latest/userguide/models-supported.html).
+
+## Full Example
+
+See [`examples/bedrock/main.go`](https://github.com/delavalom/graft/blob/main/examples/bedrock/main.go) for a runnable agent using Bedrock with a tool.

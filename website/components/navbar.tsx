@@ -7,7 +7,7 @@ import { REPO_URL } from "@/lib/constants";
 const navLinks = [
   { label: "Use Cases", href: "#use-cases" },
   { label: "Features", href: "#features" },
-  { label: "Docs", href: "#docs" },
+  { label: "Docs", href: "/docs" },
   { label: "GitHub", href: REPO_URL },
 ];
 

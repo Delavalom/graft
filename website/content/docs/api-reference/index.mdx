@@ -131,3 +131,23 @@ const (
 ```
 
 Use `NewAgentError(errType, message, cause)` to create errors with optional `Context` map.
+
+## Sub-packages
+
+| Package | Purpose |
+|---------|---------|
+| `provider/openai` | OpenAI + any OpenAI-compatible endpoint (OpenRouter, Ollama, LM Studio, vLLM) |
+| `provider/anthropic` | Anthropic Messages API |
+| `provider/google` | Google Gemini Generative Language API |
+| `provider/bedrock` | AWS Bedrock Converse API with native SigV4 |
+| `provider` | `Router` (fallback, round-robin) and `Chain` middleware |
+| `guardrail` | Built-in guardrails: `MaxTokens`, `ContentFilter`, `SchemaValidator` |
+| `stream` | SSE HTTP handler adapter and `Collect` helper |
+| `otel` | OpenTelemetry tracing and metrics wrappers |
+| `state` | Session persistence with `MemoryStore`, `FileStore`, `SessionRunner` |
+| `mcp` | MCP client/server with stdio and HTTP transports, `AsTools` converter |
+| `graph` | LangGraph-style orchestration (`Graph[S]`, conditional edges, `ReactAgentGraph`) |
+| `tracing` | Pluggable tracing: Braintrust, LangSmith, OTel, Multi, Noop |
+| `hatchet` | [Hatchet durable runtime](/docs/runtimes/hatchet) |
+| `temporal` | [Temporal durable runtime](/docs/runtimes/temporal) |
+| `trigger` | Trigger.dev HTTP bridge (SSE streaming, waitpoints) |
