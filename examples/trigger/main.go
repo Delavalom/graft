@@ -1,3 +1,17 @@
+// Trigger.dev example.
+//
+// TriggerRunner dispatches agent runs to Trigger.dev tasks over HTTPS and
+// polls for completion. Unlike the Hatchet and Temporal runtimes, Trigger.dev
+// does not require a Go worker — the task that executes the agent lives in
+// your Trigger.dev project (usually TypeScript) and is the side that
+// configures the LLM provider.
+//
+// This client-side program is runnable against a real Trigger.dev project.
+// Set TRIGGER_API_KEY and TRIGGER_PROJECT_ID before running:
+//
+//	export TRIGGER_API_KEY="tr_..."
+//	export TRIGGER_PROJECT_ID="proj_..."
+//	go run ./examples/trigger
 package main
 
 import (
@@ -6,27 +20,13 @@ import (
 	"os"
 
 	"github.com/delavalom/graft"
-	"github.com/delavalom/graft/provider/openai"
 	"github.com/delavalom/graft/trigger"
 )
 
-// This example shows how to run a graft agent via Trigger.dev's REST API.
-// You need a Trigger.dev project with a task configured to handle agent
-// execution payloads.
-//
-// Trigger.dev provides background jobs with event streaming, waitpoints
-// for human-in-the-loop approvals, and scheduled execution.
 func main() {
-	model := openai.New(
-		openai.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
-		openai.WithBaseURL("https://openrouter.ai/api/v1"),
-		openai.WithModel("anthropic/claude-sonnet-4.6"),
-	)
-	_ = model // Model is used by the Trigger.dev task, not the client.
-
 	runner := trigger.NewTriggerRunner("https://api.trigger.dev",
 		trigger.WithAPIKey(os.Getenv("TRIGGER_API_KEY")),
-		trigger.WithProjectID("my-project"),
+		trigger.WithProjectID(os.Getenv("TRIGGER_PROJECT_ID")),
 		trigger.WithEnvironment("production"),
 	)
 

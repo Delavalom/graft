@@ -83,7 +83,10 @@ w.Run(worker.InterruptCh())
 
 Each LLM call runs as a `GenerateActivity`; each tool call runs as a `ToolActivity`. On worker crash, Temporal replays completed activities from event history and resumes from the last checkpoint.
 
-See [`examples/temporal/main.go`](https://github.com/delavalom/graft/blob/main/examples/temporal/main.go) for the full pattern.
+The [`examples/temporal/`](https://github.com/delavalom/graft/tree/main/examples/temporal) directory has two sub-packages:
+
+- [`client/`](https://github.com/delavalom/graft/tree/main/examples/temporal/client) — runnable workflow-dispatch example using an in-process demo client.
+- [`worker/`](https://github.com/delavalom/graft/tree/main/examples/temporal/worker) — registration pattern for a real Temporal worker.
 
 ## Runner Options
 

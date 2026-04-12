@@ -1,0 +1,230 @@
+---
+title: For Agents
+description: Token-dense quickstart for AI coding agents integrating the Graft package. Minimal prose, no pedagogy — just the shapes you need.
+---
+
+# Graft for Agents
+
+This page is for AI coding agents writing Graft code on behalf of a user. It is a cheat sheet, not a tutorial.
+
+For the human-paced walkthrough, see [Quick Start](/docs/getting-started).
+
+## Module
+
+```
+module path: github.com/delavalom/graft
+go version:  1.24+
+deps:        go.opentelemetry.io/otel (only external dep)
+```
+
+## Minimal agent
+
+```go
+import (
+    "context"
+    "os"
+
+    "github.com/delavalom/graft"
+    "github.com/delavalom/graft/provider/openai"
+)
+
+model := openai.New(openai.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
+runner := graft.NewDefaultRunner(model)
+
+agent := graft.NewAgent("assistant",
+    graft.WithInstructions("You are a helpful assistant."),
+)
+
+result, err := runner.Run(ctx, agent, []graft.Message{
+    {Role: graft.RoleUser, Content: "Hello"},
+})
+// result.FinalOutput, result.Messages, result.Agent, result.Usage
+```
+
+`graft.NewAgent` and all options are functional. The older `&graft.Agent{...}` struct-literal form still works; prefer `NewAgent` in new code.
+
+## Tools (generic, type-safe)
+
+```go
+type Params struct {
+    City string `json:"city" description:"City name"`
+}
+
+weather := graft.NewTool("get_weather", "Get the weather.",
+    func(ctx context.Context, p Params) (string, error) {
+        return "72°F and sunny in " + p.City, nil
+    },
+)
+
+agent := graft.NewAgent("bot",
+    graft.WithInstructions("..."),
+    graft.WithTools(weather),
+)
+```
+
+Rules:
+- `NewTool[P, R]` infers `P` from the second function parameter. The struct `P` defines the JSON Schema — every field needs a `json` tag; `description` tags become schema descriptions.
+- `R` can be any type. Strings pass through; other types are JSON-marshaled into the tool result content.
+- Do **not** hand-write `type Tool interface` implementations. Use `NewTool`.
+
+## Provider swap
+
+One line change. Agents, tools, runner are unchanged.
+
+```go
+// OpenAI
+model := openai.New(openai.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
+
+// Anthropic
+model := anthropic.New(anthropic.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
+
+// Google Gemini
+model := google.New(google.WithAPIKey(os.Getenv("GOOGLE_API_KEY")))
+
+// AWS Bedrock
+model := bedrock.New(
+    bedrock.WithRegion("us-east-1"),
+    bedrock.WithModel("anthropic.claude-sonnet-4-20250514-v1:0"),
+)
+
+// OpenAI-compatible (OpenRouter, Ollama, LM Studio, vLLM)
+model := openai.New(
+    openai.WithBaseURL("https://openrouter.ai/api/v1"),
+    openai.WithAPIKey(os.Getenv("OPENROUTER_API_KEY")),
+    openai.WithModel("anthropic/claude-sonnet-4.6"),
+)
+```
+
+Provider Router for fallback / round-robin:
+
+```go
+import "github.com/delavalom/graft/provider"
+
+model := provider.NewRouter(provider.WithFallback(primary, secondary))
+```
+
+## Runtime swap
+
+`graft.Runner` is an interface. Swap for durable execution:
+
+```go
+// In-process (default)
+runner := graft.NewDefaultRunner(model)
+
+// Hatchet durable functions
+runner := hatchet.NewHatchetRunner(hatchetClient, hatchet.WithNamespace("prod"))
+
+// Temporal durable workflows
+runner := temporal.NewTemporalRunner(temporalClient, temporal.WithTaskQueue("ai-agents"))
+```
+
+See [`runtimes/`](/docs/runtimes) for the full pattern. Hatchet/Temporal clients are defined as Go interfaces in-repo; inject your real SDK client.
+
+## Handoffs (multi-agent)
+
+```go
+billing := graft.NewAgent("billing", graft.WithInstructions("Handle billing."))
+support := graft.NewAgent("support", graft.WithInstructions("Handle tech support."))
+
+router := graft.NewAgent("router",
+    graft.WithInstructions("Route the user to the right specialist."),
+    graft.WithHandoffs(
+        graft.Handoff{Target: billing, Description: "Billing questions"},
+        graft.Handoff{Target: support, Description: "Tech support"},
+    ),
+)
+```
+
+Handoffs are synthetic tools named `handoff_<target-name>`. When the LLM calls one, the runner switches the active agent.
+
+## Hooks
+
+```go
+hooks := graft.NewHookRegistry()
+hooks.On(graft.HookPreToolCall, func(ctx context.Context, p *graft.HookPayload) (*graft.HookResult, error) {
+    if p.ToolCall.Name == "delete_database" {
+        deny := false
+        return &graft.HookResult{Allow: &deny}, nil
+    }
+    return nil, nil
+})
+
+agent := graft.NewAgent("a", graft.WithHooks(hooks))
+```
+
+Events: `HookAgentStart`, `HookAgentEnd`, `HookPreGenerate`, `HookPostGenerate`, `HookPreToolCall`, `HookPostToolCall`, `HookToolCallError`, `HookPreHandoff`, `HookPostHandoff`, `HookGuardrailTrip`.
+
+## Guardrails
+
+```go
+import "github.com/delavalom/graft/guardrail"
+
+agent := graft.NewAgent("a",
+    graft.WithGuardrails(
+        guardrail.NewMaxTokens(4000),
+        guardrail.NewContentFilter([]string{"password", "ssn"}),
+    ),
+)
+```
+
+## Streaming
+
+```go
+events, _ := runner.RunStream(ctx, agent, msgs)
+for ev := range events {
+    switch ev.Type {
+    case graft.StreamEventToken:
+        fmt.Print(ev.Token)
+    case graft.StreamEventToolCallStart:
+        // ...
+    case graft.StreamEventDone:
+        return
+    }
+}
+```
+
+`RunStream` currently wraps `Run` in a goroutine — it emits lifecycle events, not per-token tokens. True token-level streaming from the runner is not yet implemented. For per-token output, call `LanguageModel.Stream` directly.
+
+## Conventions (enforce when writing Graft code)
+
+- **Functional options everywhere.** `NewAgent`, provider constructors, runner options, tool options all take `...Option` variadic functions. Never mutate struct fields directly on returned values.
+- **Type-safe tools only.** Never bypass `NewTool` with a hand-rolled `Tool` implementation unless you genuinely need dynamic schemas.
+- **Errors via `NewAgentError`.** `NewAgentError(ErrType, message, cause)` with optional `Context` map. Don't wrap with `fmt.Errorf` when the caller will need `.Type()` or `.IsRetryable()`.
+- **Messages: use role constants.** `graft.RoleUser`, `graft.RoleAssistant`, `graft.RoleSystem`, `graft.RoleTool` — not raw strings.
+- **Provider-native models.** Model IDs are vendor-specific strings (e.g. `gpt-4o`, `claude-sonnet-4-20250514`, `anthropic.claude-sonnet-4-20250514-v1:0`). Never invent new model IDs.
+- **Zero SDK deps.** Providers use `net/http` only. If you're adding a new provider, follow the same pattern.
+
+## Package map
+
+| Import path | Purpose |
+|-------------|---------|
+| `github.com/delavalom/graft` | Core: Agent, Tool, Runner, Message, Hook, Guardrail, Handoff |
+| `.../provider/openai` | OpenAI + OpenAI-compatible |
+| `.../provider/anthropic` | Anthropic Messages API |
+| `.../provider/google` | Google Gemini |
+| `.../provider/bedrock` | AWS Bedrock Converse + SigV4 |
+| `.../provider` | `Router`, `Chain` middleware |
+| `.../guardrail` | Built-in guardrails |
+| `.../stream` | SSE HTTP handler |
+| `.../otel` | OpenTelemetry wrappers |
+| `.../state` | Session persistence |
+| `.../mcp` | MCP client/server |
+| `.../graph` | Graph orchestration |
+| `.../tracing` | Pluggable tracing backends |
+| `.../hatchet` | Hatchet durable runtime |
+| `.../temporal` | Temporal durable runtime |
+| `.../trigger` | Trigger.dev HTTP bridge |
+
+## Installation skill
+
+A Claude Code skill that encodes these conventions lives at [`skills/graft/`](https://github.com/delavalom/graft/tree/main/skills/graft) in the repo. Install:
+
+```bash
+# User-wide (all projects)
+cp -r skills/graft ~/.claude/skills/
+
+# Project-only
+mkdir -p .claude/skills && cp -r skills/graft .claude/skills/
+```
+
+The skill auto-activates when Claude Code detects `github.com/delavalom/graft` in `go.mod`.

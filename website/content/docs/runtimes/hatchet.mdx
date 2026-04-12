@@ -48,7 +48,10 @@ result, err := runner.Run(context.Background(), agent, []graft.Message{
 })
 ```
 
-See [`examples/hatchet/main.go`](https://github.com/delavalom/graft/blob/main/examples/hatchet/main.go) for a complete, runnable example.
+The [`examples/hatchet/`](https://github.com/delavalom/graft/tree/main/examples/hatchet) directory has two sub-packages:
+
+- [`client/`](https://github.com/delavalom/graft/tree/main/examples/hatchet/client) — runnable dispatch example using an in-process demo client.
+- [`worker/`](https://github.com/delavalom/graft/tree/main/examples/hatchet/worker) — registration pattern for a real Hatchet worker.
 
 ## Runner Options
 
