@@ -1,0 +1,114 @@
+---
+title: Hooks
+description: Hooks let you observe and control the agent lifecycle — logging, denying tool calls, injecting context, and more.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Hooks
+
+Hooks are lifecycle callbacks that fire at key points in the agent loop. Use them for logging, auditing, denying tool calls, injecting context, or any cross-cutting concern.
+
+## Hook Events
+
+```go
+const (
+    HookAgentStart    HookEvent = "agent_start"
+    HookAgentEnd      HookEvent = "agent_end"
+    HookPreGenerate   HookEvent = "pre_generate"
+    HookPostGenerate  HookEvent = "post_generate"
+    HookPreToolCall   HookEvent = "pre_tool_call"
+    HookPostToolCall  HookEvent = "post_tool_call"
+    HookToolCallError HookEvent = "tool_call_error"
+    HookPreHandoff    HookEvent = "pre_handoff"
+    HookPostHandoff   HookEvent = "post_handoff"
+    HookGuardrailTrip HookEvent = "guardrail_trip"
+)
+```
+
+## HookRegistry
+
+Create a registry and register callbacks:
+
+```go
+hooks := graft.NewHookRegistry()
+
+hooks.On(graft.HookPreToolCall, func(ctx context.Context, payload *graft.HookPayload) (*graft.HookResult, error) {
+    log.Printf("Agent %s calling tool: %s", payload.Agent.Name, payload.ToolCall.Name)
+    return nil, nil
+})
+
+hooks.On(graft.HookAgentEnd, func(ctx context.Context, payload *graft.HookPayload) (*graft.HookResult, error) {
+    log.Printf("Agent %s finished with %d messages", payload.Agent.Name, len(payload.Messages))
+    return nil, nil
+})
+
+agent := &graft.Agent{
+    Name:  "my-agent",
+    Hooks: hooks,
+}
+```
+
+## The HookPayload
+
+Every hook receives a `HookPayload` with context about the event:
+
+```go
+type HookPayload struct {
+    Event    HookEvent
+    Agent    *Agent
+    ToolCall *ToolCall       // Set for tool-related events
+    Messages []Message
+    Metadata map[string]any
+}
+```
+
+## Controlling Execution with HookResult
+
+Hooks can return a `HookResult` to influence the agent loop:
+
+```go
+type HookResult struct {
+    Allow         *bool   // Deny a tool call when false
+    ModifiedInput []byte  // Replace tool input
+    AdditionalCtx string  // Inject additional context
+    SkipExecution bool    // Skip the current step
+}
+```
+
+### Denying a Tool Call
+
+```go
+hooks.On(graft.HookPreToolCall, func(ctx context.Context, payload *graft.HookPayload) (*graft.HookResult, error) {
+    if payload.ToolCall.Name == "delete_database" {
+        allow := false
+        return &graft.HookResult{
+            Allow: &allow,
+        }, nil
+    }
+    return nil, nil
+})
+```
+
+### Audit Logging
+
+```go
+hooks.On(graft.HookPostToolCall, func(ctx context.Context, payload *graft.HookPayload) (*graft.HookResult, error) {
+    audit.Log(ctx, audit.Entry{
+        Agent:    payload.Agent.Name,
+        Tool:     payload.ToolCall.Name,
+        Input:    string(payload.ToolCall.Arguments),
+        Time:     time.Now(),
+    })
+    return nil, nil
+})
+```
+
+<Callout type="info">
+Multiple hooks can be registered for the same event. They execute in registration order. If any hook denies execution (via `Allow: false` or `SkipExecution: true`), subsequent hooks for that event still run but the operation is blocked.
+</Callout>
+
+## Next Steps
+
+- [Providers](/docs/providers) — configure LLM backends
+- [Guides](/docs/guides) — real-world patterns and recipes

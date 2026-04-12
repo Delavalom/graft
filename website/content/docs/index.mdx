@@ -1,0 +1,74 @@
+---
+title: Introduction
+description: Graft is a Go-native framework for building AI agents and LLM-powered applications with type safety, multi-provider support, and production observability.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Welcome to Graft
+
+Graft is a **Go-native framework** for building AI agents and LLM-powered applications. It gives you type-safe tools, multi-provider routing, OpenTelemetry observability, and a clean agent loop — all with a single external dependency.
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+
+    "github.com/delavalom/graft"
+    "github.com/delavalom/graft/provider/openai"
+)
+
+func main() {
+    model := openai.New(openai.WithAPIKey("sk-..."))
+    runner := graft.NewDefaultRunner(model)
+
+    agent := &graft.Agent{
+        Name:         "greeter",
+        Instructions: "You are a helpful assistant. Be concise.",
+    }
+
+    result, err := runner.Run(context.Background(), agent, []graft.Message{
+        {Role: "user", Content: "Hello!"},
+    })
+    if err != nil {
+        panic(err)
+    }
+    fmt.Println(result.FinalOutput)
+}
+```
+
+## Why Graft?
+
+**Go-native, not a port.** Graft isn't a Python framework translated into Go. It's built from the ground up around Go idioms — functional options, interfaces, struct tags, and zero reflection magic at runtime.
+
+**One dependency.** The only external dependency is OpenTelemetry. No SDK wrappers, no bloated dependency trees. Every provider uses raw `net/http`.
+
+**Type-safe tools.** Define tool parameters as Go structs. Graft generates the JSON Schema automatically from your types using struct tags — no manual schema authoring.
+
+**Multi-provider.** Ship with OpenAI, Anthropic, and Google Gemini out of the box. Bring your own provider by implementing a single interface.
+
+**Production-ready observability.** OpenTelemetry tracing and metrics are built in, not bolted on. Wrap your runner and get full visibility into agent loops, tool calls, and handoffs.
+
+<Callout title="Go 1.24+" type="info">
+Graft requires Go 1.24 or later.
+</Callout>
+
+## Quick Install
+
+```bash
+go get github.com/delavalom/graft@latest
+```
+
+Then grab the provider you need:
+
+```bash
+go get github.com/delavalom/graft/provider/openai
+go get github.com/delavalom/graft/provider/anthropic
+go get github.com/delavalom/graft/provider/google
+```
+
+## Next Steps
+
+Head to [Getting Started](/docs/getting-started) to build your first agent in under 5 minutes, or jump to [Core Concepts](/docs/core-concepts) if you want to understand the architecture first.

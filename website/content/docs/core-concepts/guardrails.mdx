@@ -1,0 +1,107 @@
+---
+title: Guardrails
+description: Guardrails validate inputs, outputs, and tool calls to enforce safety, quality, and business constraints.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Guardrails
+
+Guardrails are validation checkpoints that run at different stages of the agent loop. They can block unsafe inputs, filter harmful outputs, or validate tool calls before execution.
+
+## Guardrail Types
+
+```go
+const (
+    GuardrailInput  GuardrailType = "input"   // Validates user input before LLM call
+    GuardrailOutput GuardrailType = "output"  // Validates LLM output before returning
+    GuardrailTool   GuardrailType = "tool"    // Validates tool calls before execution
+)
+```
+
+## The Guardrail Interface
+
+```go
+type Guardrail interface {
+    Name() string
+    Type() GuardrailType
+    Validate(ctx context.Context, data *ValidationData) (*ValidationResult, error)
+}
+```
+
+The `ValidationData` struct gives you access to the full context:
+
+```go
+type ValidationData struct {
+    Messages   []Message
+    ToolCall   *ToolCall     // Set for tool guardrails
+    ToolResult *ToolResult   // Set for output guardrails after tool execution
+    Agent      *Agent
+}
+```
+
+## ValidationResult
+
+```go
+type ValidationResult struct {
+    Pass     bool   // Whether the validation passed
+    Message  string // Reason for failure (shown to user or logged)
+    Modified any    // Optional: modified content to use instead
+}
+```
+
+## Adding Guardrails to an Agent
+
+```go
+agent := &graft.Agent{
+    Name:         "assistant",
+    Instructions: "You are a helpful assistant.",
+    Guardrails:   []graft.Guardrail{contentFilter, maxTokensGuard},
+}
+```
+
+## Built-in Guardrails
+
+Graft ships with common guardrails in the `guardrail` package:
+
+```go
+import "github.com/delavalom/graft/guardrail"
+
+// Limit output token count
+maxTokens := guardrail.MaxTokens(4096)
+
+// Filter content by keywords
+filter := guardrail.ContentFilter([]string{"password", "secret", "api_key"})
+```
+
+## Custom Guardrails
+
+Implement the interface for domain-specific validation:
+
+```go
+type PIIGuardrail struct{}
+
+func (g *PIIGuardrail) Name() string          { return "pii_filter" }
+func (g *PIIGuardrail) Type() GuardrailType   { return graft.GuardrailOutput }
+
+func (g *PIIGuardrail) Validate(ctx context.Context, data *graft.ValidationData) (*graft.ValidationResult, error) {
+    // Check the last assistant message for PII
+    lastMsg := data.Messages[len(data.Messages)-1]
+    if containsPII(lastMsg.Content) {
+        return &graft.ValidationResult{
+            Pass:    false,
+            Message: "Response contains personally identifiable information",
+        }, nil
+    }
+    return &graft.ValidationResult{Pass: true}, nil
+}
+```
+
+<Callout type="warn">
+When a guardrail fails, the runner returns a `GuardrailTrip` error. Handle this in your application to provide appropriate feedback to users.
+</Callout>
+
+## Next Steps
+
+- [Hooks](/docs/core-concepts/hooks) — listen for guardrail trip events
+- [Providers](/docs/providers) — configure the LLM backing your agents

@@ -1,0 +1,69 @@
+---
+title: Observability
+description: Instrument your agents with OpenTelemetry tracing and metrics.
+---
+
+# Observability
+
+Graft provides first-class OpenTelemetry integration through runner wrappers. Get full visibility into agent loops, LLM calls, tool executions, and handoffs.
+
+## Setup
+
+```go
+import "github.com/delavalom/graft/otel"
+
+model := openai.New(openai.WithAPIKey("sk-..."))
+runner := graft.NewDefaultRunner(model)
+
+// Add tracing
+traced := otel.NewTracingRunner(runner)
+
+// Add metrics on top
+instrumented := otel.NewMetricsRunner(traced)
+
+// Use the instrumented runner
+result, err := instrumented.Run(ctx, agent, messages)
+```
+
+## What Gets Traced
+
+The `TracingRunner` creates spans for:
+
+- **Agent runs** — the full `Run()` call with agent name, iteration count
+- **LLM calls** — each `Generate()` call with model ID, token usage
+- **Tool executions** — each tool call with tool name, duration
+- **Handoffs** — agent switches with source and target agent names
+- **Guardrail checks** — validation results with pass/fail status
+
+## What Gets Metered
+
+The `MetricsRunner` records:
+
+- `graft.agent.runs` — counter of agent runs by agent name
+- `graft.agent.iterations` — histogram of iterations per run
+- `graft.llm.tokens` — counter of input/output tokens by model
+- `graft.tool.calls` — counter of tool executions by tool name
+- `graft.tool.duration` — histogram of tool execution time
+- `graft.tool.errors` — counter of tool errors by tool name
+
+## Integration with Your Stack
+
+Since Graft uses standard OpenTelemetry, traces and metrics flow to whatever backend you're already using — Jaeger, Datadog, Grafana, Honeycomb, etc.
+
+```go
+// Example: configure the OTel SDK to export to Jaeger
+import (
+    "go.opentelemetry.io/otel"
+    "go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp"
+    sdktrace "go.opentelemetry.io/otel/sdk/trace"
+)
+
+exporter, _ := otlptracehttp.New(ctx,
+    otlptracehttp.WithEndpoint("jaeger:4318"),
+    otlptracehttp.WithInsecure(),
+)
+tp := sdktrace.NewTracerProvider(sdktrace.WithBatcher(exporter))
+otel.SetTracerProvider(tp)
+
+// Now all Graft tracing goes to Jaeger
+```

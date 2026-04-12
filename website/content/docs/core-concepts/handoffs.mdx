@@ -1,0 +1,101 @@
+---
+title: Handoffs
+description: Handoffs enable multi-agent orchestration by allowing one agent to transfer control to another mid-conversation.
+---
+
+# Handoffs
+
+Handoffs let agents delegate to other agents. When an agent "hands off" to another, the runner switches the active agent and continues the loop with the new agent's instructions and tools.
+
+## How Handoffs Work
+
+Under the hood, handoffs are implemented as **synthetic tools**. When you add a handoff to an agent, the runner creates a tool named `handoff_<target-agent-name>`. When the LLM "calls" this tool, the runner switches the active agent instead of executing a function.
+
+```go
+triageAgent := &graft.Agent{
+    Name:         "triage",
+    Instructions: "Route the user to the right specialist agent.",
+    Handoffs: []graft.Handoff{
+        {
+            Target:      billingAgent,
+            Description: "Hand off to billing for payment and invoice questions",
+        },
+        {
+            Target:      technicalAgent,
+            Description: "Hand off to technical support for product issues",
+        },
+    },
+}
+```
+
+The LLM sees tools like `handoff_billing` and `handoff_technical` in its tool list and can choose to call them based on the conversation context.
+
+## Conditional Handoffs
+
+Use the `Filter` function to control when a handoff is available:
+
+```go
+graft.Handoff{
+    Target:      escalationAgent,
+    Description: "Escalate to a human supervisor",
+    Filter: func(ctx context.Context, messages []graft.Message) bool {
+        // Only allow escalation after 3+ exchanges
+        return len(messages) > 6
+    },
+}
+```
+
+When `Filter` returns `false`, the handoff tool is excluded from the tool list sent to the LLM.
+
+## Multi-Agent Patterns
+
+### Triage Pattern
+
+A router agent delegates to specialist agents:
+
+```go
+router := &graft.Agent{
+    Name: "router",
+    Instructions: "Determine what the user needs and hand off to the right agent.",
+    Handoffs: []graft.Handoff{
+        {Target: salesAgent, Description: "Sales inquiries"},
+        {Target: supportAgent, Description: "Technical support"},
+        {Target: billingAgent, Description: "Billing questions"},
+    },
+}
+```
+
+### Pipeline Pattern
+
+Agents hand off sequentially, each performing one step:
+
+```go
+researcher := &graft.Agent{
+    Name: "researcher",
+    Instructions: "Research the topic, then hand off to the writer.",
+    Tools: []graft.Tool{searchTool},
+    Handoffs: []graft.Handoff{
+        {Target: writer, Description: "Pass research to the writer"},
+    },
+}
+
+writer := &graft.Agent{
+    Name: "writer",
+    Instructions: "Write a blog post based on the research in the conversation.",
+}
+```
+
+## Result Agent
+
+After a run with handoffs, `Result.Agent` tells you which agent produced the final output:
+
+```go
+result, _ := runner.Run(ctx, router, messages)
+fmt.Printf("Handled by: %s\n", result.Agent.Name)
+// Output: "Handled by: billing"
+```
+
+## Next Steps
+
+- [Guardrails](/docs/core-concepts/guardrails) — validate inputs and outputs
+- [Hooks](/docs/core-concepts/hooks) — observe handoff events

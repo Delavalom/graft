@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import { Geist, Geist_Mono } from "next/font/google";
+import { RootProvider } from "fumadocs-ui/provider/next";
 import "./globals.css";
 
 const geistSans = Geist({
@@ -53,7 +54,14 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-dark-600 text-jade-50`}
       >
-        {children}
+        <RootProvider
+          theme={{
+            defaultTheme: "dark",
+            enabled: false,
+          }}
+        >
+          {children}
+        </RootProvider>
       </body>
     </html>
   );

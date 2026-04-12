@@ -1,0 +1,114 @@
+---
+title: Runner
+description: The runner drives the agent loop — sending messages, executing tools, handling handoffs, and iterating until completion.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Runner
+
+The `Runner` is the engine that drives the agent loop. It sends messages to the LLM, executes tool calls, handles handoffs between agents, and repeats until the model responds without tool calls or the iteration limit is reached.
+
+## The Runner Interface
+
+```go
+type Runner interface {
+    Run(ctx context.Context, agent *Agent, messages []Message, opts ...RunOption) (*Result, error)
+    RunStream(ctx context.Context, agent *Agent, messages []Message, opts ...RunOption) (<-chan StreamEvent, error)
+}
+```
+
+## DefaultRunner
+
+The standard implementation. Create one with a `LanguageModel`:
+
+```go
+model := openai.New(openai.WithAPIKey("sk-..."))
+runner := graft.NewDefaultRunner(model)
+```
+
+## The Agent Loop
+
+Here's what happens when you call `runner.Run()`:
+
+```
+User messages → Agent → Runner.Run() → LanguageModel.Generate()
+  → Tool calls? → Execute tools → Append results → Loop back
+  → Handoff? → Switch active agent → Loop back
+  → No tool calls? → Return Result
+```
+
+1. The runner prepends the agent's `Instructions` as a system message
+2. It sends messages + tool definitions to the LLM
+3. If the LLM responds with tool calls, the runner executes them and appends results
+4. If a handoff tool is called, the runner switches the active agent
+5. Steps 2-4 repeat until the model gives a final text response or max iterations is hit
+
+## Run Options
+
+Configure behavior per-run with functional options:
+
+```go
+result, err := runner.Run(ctx, agent, messages,
+    graft.WithMaxIterations(5),     // Default is 10
+    graft.WithContext("request-id", reqID),
+)
+```
+
+## The Result
+
+```go
+type Result struct {
+    FinalOutput string
+    Messages    []Message
+    Agent       *Agent    // The agent that produced the final output
+}
+```
+
+`Result.Messages` contains the full conversation history including all tool calls and results — useful for continuing conversations or debugging.
+
+## Streaming
+
+`RunStream` returns a channel of `StreamEvent` values:
+
+```go
+events, err := runner.RunStream(ctx, agent, messages)
+if err != nil {
+    log.Fatal(err)
+}
+
+for event := range events {
+    switch event.Type {
+    case graft.StreamEventToken:
+        fmt.Print(event.Token)
+    case graft.StreamEventDone:
+        fmt.Println("\n---")
+        fmt.Println("Final:", event.Result.FinalOutput)
+    case graft.StreamEventError:
+        log.Fatal(event.Error)
+    }
+}
+```
+
+<Callout type="info">
+`RunStream` currently wraps `Run` in a goroutine. True token-level streaming from the runner loop is on the roadmap.
+</Callout>
+
+## Observability Wrappers
+
+Wrap the runner with OpenTelemetry instrumentation:
+
+```go
+import "github.com/delavalom/graft/otel"
+
+traced := otel.NewTracingRunner(runner)
+metered := otel.NewMetricsRunner(traced)
+
+// Use metered runner — traces every LLM call, tool execution, and handoff
+result, err := metered.Run(ctx, agent, messages)
+```
+
+## Next Steps
+
+- [Tools](/docs/core-concepts/tools) — what the agent can do
+- [Hooks](/docs/core-concepts/hooks) — lifecycle events in the loop

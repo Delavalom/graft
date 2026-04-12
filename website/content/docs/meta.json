@@ -1,0 +1,17 @@
+{
+  "title": "Docs",
+  "pages": [
+    "---Introduction---",
+    "index",
+    "---Getting Started---",
+    "getting-started",
+    "---Core Concepts---",
+    "core-concepts",
+    "---Providers---",
+    "providers",
+    "---Guides---",
+    "guides",
+    "---API Reference---",
+    "api-reference"
+  ]
+}

@@ -1,0 +1,52 @@
+---
+title: Overview
+description: Graft supports multiple LLM providers out of the box — OpenAI, Anthropic, and Google Gemini — all through raw HTTP with zero SDK dependencies.
+---
+
+# Providers
+
+Every LLM provider in Graft implements the same `LanguageModel` interface:
+
+```go
+type LanguageModel interface {
+    Generate(ctx context.Context, params GenerateParams) (*GenerateResult, error)
+    Stream(ctx context.Context, params GenerateParams) (<-chan StreamChunk, error)
+    ModelID() string
+}
+```
+
+This means you can swap providers without changing your agent code. All providers use raw `net/http` — no external SDKs.
+
+## Available Providers
+
+| Provider | Package | Models |
+|----------|---------|--------|
+| OpenAI | `provider/openai` | GPT-4o, GPT-4o-mini, o1, o3, etc. |
+| Anthropic | `provider/anthropic` | Claude Sonnet, Claude Opus, Claude Haiku |
+| Google | `provider/google` | Gemini 2.0 Flash, Gemini 2.5 Pro |
+| OpenAI-compatible | `provider/openai` | OpenRouter, Ollama, LM Studio, vLLM |
+
+## Provider Middleware
+
+Wrap any provider with middleware using `provider.Chain`:
+
+```go
+import "github.com/delavalom/graft/provider"
+
+model := openai.New(openai.WithAPIKey("sk-..."))
+wrapped := provider.Chain(model, provider.WithLogging(logger))
+```
+
+## Provider Router
+
+Route between multiple providers for fallback or load balancing:
+
+```go
+router := provider.NewRouter(
+    provider.WithFallback(primaryModel, fallbackModel),
+)
+// or
+router := provider.NewRouter(
+    provider.WithRoundRobin(model1, model2, model3),
+)
+```

@@ -1,0 +1,109 @@
+---
+title: Agents
+description: The Agent struct is the central building block of Graft. It defines what the LLM knows, what it can do, and how it behaves.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Agents
+
+The `Agent` struct is the core unit of work in Graft. An agent combines instructions, tools, guardrails, and handoff targets into a single configuration that the runner executes against a language model.
+
+## The Agent Struct
+
+```go
+type Agent struct {
+    Name         string
+    Instructions string
+    Tools        []Tool
+    Model        string
+    Temperature  *float64
+    MaxTokens    *int
+    ToolChoice   ToolChoice
+    Guardrails   []Guardrail
+    Handoffs     []Handoff
+    SubAgents    []*SubAgent
+    Hooks        *HookRegistry
+    Metadata     map[string]any
+}
+```
+
+## Creating an Agent
+
+Agents are plain Go structs. No constructors required — just set the fields you need.
+
+```go
+agent := &graft.Agent{
+    Name:         "code-reviewer",
+    Instructions: "You are an expert Go code reviewer. Be concise and actionable.",
+    Tools:        []graft.Tool{lintTool, testTool},
+}
+```
+
+## Instructions
+
+The `Instructions` field becomes the system message sent to the LLM. Write clear, specific instructions that define the agent's personality, constraints, and goals.
+
+```go
+agent := &graft.Agent{
+    Name: "sql-analyst",
+    Instructions: `You are a SQL analyst. You have access to a PostgreSQL database.
+Rules:
+- Always use parameterized queries
+- Never run DELETE or DROP statements
+- Explain your queries before executing them`,
+}
+```
+
+## Tool Choice
+
+Control how the model uses tools:
+
+```go
+// Let the model decide (default)
+agent.ToolChoice = graft.ToolChoiceAuto
+
+// Force the model to call a tool
+agent.ToolChoice = graft.ToolChoiceRequired
+
+// Prevent tool use entirely
+agent.ToolChoice = graft.ToolChoiceNone
+
+// Force a specific tool
+agent.ToolChoice = graft.ToolChoiceSpecific("get_weather")
+```
+
+## Model Override
+
+By default, agents use whatever model is configured on the runner's `LanguageModel`. You can override this per-agent:
+
+```go
+agent := &graft.Agent{
+    Name:  "cheap-classifier",
+    Model: "gpt-4o-mini",  // Use a cheaper model for this agent
+}
+```
+
+<Callout type="warn">
+Model override requires provider support. The provider must resolve the model string to the correct endpoint.
+</Callout>
+
+## Metadata
+
+Attach arbitrary data to an agent for use in hooks, logging, or custom logic:
+
+```go
+agent := &graft.Agent{
+    Name: "support-bot",
+    Metadata: map[string]any{
+        "team":    "customer-success",
+        "version": "2.1",
+    },
+}
+```
+
+## Next Steps
+
+- [Tools](/docs/core-concepts/tools) — give your agent capabilities
+- [Handoffs](/docs/core-concepts/handoffs) — orchestrate multiple agents
+- [Guardrails](/docs/core-concepts/guardrails) — add safety constraints

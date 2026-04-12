@@ -1,0 +1,123 @@
+---
+title: Tools
+description: Tools give agents the ability to interact with the world. Graft provides type-safe tool definitions powered by Go generics.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+
+# Tools
+
+Tools are how agents interact with the outside world — fetching data, calling APIs, running computations, or anything else you can express as a Go function.
+
+## The Tool Interface
+
+```go
+type Tool interface {
+    Name() string
+    Description() string
+    Schema() json.RawMessage
+    Execute(ctx context.Context, params json.RawMessage) (any, error)
+}
+```
+
+## NewTool — Type-Safe Tool Creation
+
+`NewTool` uses Go generics to create tools from typed functions. The parameter struct becomes the JSON Schema automatically.
+
+```go
+type SearchParams struct {
+    Query   string `json:"query"   description:"The search query"`
+    MaxHits int    `json:"max_hits" description:"Maximum results to return"`
+}
+
+searchTool := graft.NewTool(
+    "search",
+    "Search the knowledge base for relevant documents",
+    func(ctx context.Context, params SearchParams) (string, error) {
+        results, err := kb.Search(params.Query, params.MaxHits)
+        if err != nil {
+            return "", err
+        }
+        return formatResults(results), nil
+    },
+)
+```
+
+### How Schema Generation Works
+
+Graft inspects your parameter struct at tool creation time and generates a JSON Schema:
+
+- `json:"name"` tags → field names in the schema
+- `description:"..."` tags → field descriptions the LLM sees
+- Go types → JSON Schema types (`string` → `"string"`, `int` → `"integer"`, etc.)
+- Nested structs → nested `object` schemas
+- Pointer fields → optional parameters
+
+```go
+type DeployParams struct {
+    Service string  `json:"service" description:"Service name to deploy"`
+    Version string  `json:"version" description:"Semantic version tag"`
+    DryRun  *bool   `json:"dry_run" description:"Preview without applying changes"`
+}
+```
+
+This generates:
+
+```json
+{
+  "type": "object",
+  "properties": {
+    "service": { "type": "string", "description": "Service name to deploy" },
+    "version": { "type": "string", "description": "Semantic version tag" },
+    "dry_run": { "type": "boolean", "description": "Preview without applying changes" }
+  },
+  "required": ["service", "version"]
+}
+```
+
+## Return Types
+
+Tool functions return `(R, error)` where `R` can be any type:
+
+- **`string`** — returned as-is to the LLM
+- **Any other type** — JSON-marshaled before being sent to the LLM
+
+```go
+// String return — passed directly
+graft.NewTool("greet", "...", func(ctx context.Context, p Params) (string, error) {
+    return "Hello!", nil
+})
+
+// Struct return — JSON-marshaled
+graft.NewTool("lookup", "...", func(ctx context.Context, p Params) (*User, error) {
+    return &User{Name: "Alice", Age: 30}, nil
+})
+```
+
+## Custom Tool Implementations
+
+For advanced cases, implement the `Tool` interface directly:
+
+```go
+type dynamicTool struct {
+    name   string
+    schema json.RawMessage
+}
+
+func (t *dynamicTool) Name() string                { return t.name }
+func (t *dynamicTool) Description() string          { return "A dynamic tool" }
+func (t *dynamicTool) Schema() json.RawMessage      { return t.schema }
+func (t *dynamicTool) Execute(ctx context.Context, params json.RawMessage) (any, error) {
+    // Custom execution logic
+    return "done", nil
+}
+```
+
+<Callout type="info">
+Tool execution errors are surfaced to the LLM as tool results, allowing the model to recover or explain the failure to the user.
+</Callout>
+
+## Next Steps
+
+- [Handoffs](/docs/core-concepts/handoffs) — tools that switch agents
+- [Guardrails](/docs/core-concepts/guardrails) — validate tool inputs and outputs

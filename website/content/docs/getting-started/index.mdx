@@ -1,0 +1,140 @@
+---
+title: Quick Start
+description: Build your first Graft agent in under 5 minutes.
+---
+
+import { Callout } from 'fumadocs-ui/components/callout';
+import { Steps, Step } from 'fumadocs-ui/components/steps';
+
+# Quick Start
+
+Build a working AI agent in Go in under 5 minutes.
+
+<Steps>
+
+<Step>
+
+## Install Graft
+
+```bash
+go get github.com/delavalom/graft@latest
+go get github.com/delavalom/graft/provider/openai
+```
+
+</Step>
+
+<Step>
+
+## Create Your First Agent
+
+Create a file called `main.go`:
+
+```go
+package main
+
+import (
+    "context"
+    "fmt"
+    "os"
+
+    "github.com/delavalom/graft"
+    "github.com/delavalom/graft/provider/openai"
+)
+
+func main() {
+    model := openai.New(openai.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
+    runner := graft.NewDefaultRunner(model)
+
+    agent := &graft.Agent{
+        Name:         "assistant",
+        Instructions: "You are a helpful coding assistant specializing in Go.",
+    }
+
+    result, err := runner.Run(context.Background(), agent, []graft.Message{
+        {Role: "user", Content: "What's the difference between a slice and an array in Go?"},
+    })
+    if err != nil {
+        panic(err)
+    }
+
+    fmt.Println(result.FinalOutput)
+}
+```
+
+</Step>
+
+<Step>
+
+## Run It
+
+```bash
+export OPENAI_API_KEY="sk-..."
+go run main.go
+```
+
+You should see the model's response printed to your terminal.
+
+</Step>
+
+</Steps>
+
+## Add a Tool
+
+Tools let your agent interact with the outside world. Define parameters as a Go struct — Graft generates the JSON Schema automatically.
+
+```go
+type WeatherParams struct {
+    City string `json:"city" description:"The city to get weather for"`
+}
+
+weatherTool := graft.NewTool(
+    "get_weather",
+    "Get the current weather for a city",
+    func(ctx context.Context, params WeatherParams) (string, error) {
+        // In a real app, call a weather API here
+        return fmt.Sprintf("It's 72°F and sunny in %s", params.City), nil
+    },
+)
+
+agent := &graft.Agent{
+    Name:         "weather-bot",
+    Instructions: "You help users check the weather. Use the get_weather tool.",
+    Tools:        []graft.Tool{weatherTool},
+}
+```
+
+The agent loop handles everything: it sends your tools to the LLM, executes any tool calls the model makes, feeds results back, and repeats until the model responds with a final answer.
+
+<Callout title="Type Safety" type="info">
+The `WeatherParams` struct fields become the tool's JSON Schema. Use `json` tags for field names and `description` tags for parameter descriptions. The LLM sees both.
+</Callout>
+
+## Switch Providers
+
+Graft supports multiple LLM providers. Swap the provider — keep everything else.
+
+```go
+// OpenAI
+model := openai.New(openai.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
+
+// Anthropic
+model := anthropic.New(anthropic.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")))
+
+// Google Gemini
+model := google.New(google.WithAPIKey(os.Getenv("GOOGLE_API_KEY")))
+
+// OpenRouter, Ollama, LM Studio — anything OpenAI-compatible
+model := openai.New(
+    openai.WithBaseURL("http://localhost:11434/v1"),
+    openai.WithModel("llama3"),
+)
+```
+
+## Next Steps
+
+Now that you have a working agent, explore the core building blocks:
+
+- [Agents](/docs/core-concepts/agents) — configuration, instructions, and the agent struct
+- [Tools](/docs/core-concepts/tools) — type-safe tool definitions and execution
+- [Handoffs](/docs/core-concepts/handoffs) — multi-agent orchestration
+- [Providers](/docs/providers) — OpenAI, Anthropic, Google, and custom providers

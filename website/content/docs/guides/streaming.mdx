@@ -1,0 +1,66 @@
+---
+title: Streaming
+description: Stream agent responses over SSE for real-time UI updates.
+---
+
+# Streaming
+
+Graft supports streaming agent responses for real-time user interfaces.
+
+## Basic Streaming
+
+```go
+events, err := runner.RunStream(ctx, agent, messages)
+if err != nil {
+    log.Fatal(err)
+}
+
+for event := range events {
+    switch event.Type {
+    case graft.StreamEventToken:
+        fmt.Print(event.Token)
+    case graft.StreamEventToolCallStart:
+        fmt.Printf("\n[Calling %s...]\n", event.ToolCall.Name)
+    case graft.StreamEventDone:
+        fmt.Println("\nDone!")
+    case graft.StreamEventError:
+        log.Printf("Error: %v", event.Error)
+    }
+}
+```
+
+## SSE HTTP Handler
+
+The `stream` package provides an adapter that converts the event channel into a Server-Sent Events HTTP handler:
+
+```go
+import "github.com/delavalom/graft/stream"
+
+http.HandleFunc("/chat", func(w http.ResponseWriter, r *http.Request) {
+    events, err := runner.RunStream(r.Context(), agent, messages)
+    if err != nil {
+        http.Error(w, err.Error(), 500)
+        return
+    }
+
+    stream.SSEHandlerFromChannel(w, events)
+})
+```
+
+## Collecting Stream Results
+
+If you need both streaming output and the final result:
+
+```go
+import "github.com/delavalom/graft/stream"
+
+events, _ := runner.RunStream(ctx, agent, messages)
+
+// Collect prints tokens as they arrive and returns the final result
+result, err := stream.Collect(events, func(event graft.StreamEvent) {
+    if event.Type == graft.StreamEventToken {
+        fmt.Print(event.Token)
+    }
+})
+// result.FinalOutput has the complete response
+```

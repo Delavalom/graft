@@ -1,0 +1,42 @@
+---
+title: Anthropic
+description: Use Anthropic's Claude models via the Messages API.
+---
+
+# Anthropic Provider
+
+The Anthropic provider uses the Messages API (version 2023-06-01) directly via `net/http`.
+
+## Installation
+
+```bash
+go get github.com/delavalom/graft/provider/anthropic
+```
+
+## Basic Usage
+
+```go
+import "github.com/delavalom/graft/provider/anthropic"
+
+model := anthropic.New(
+    anthropic.WithAPIKey(os.Getenv("ANTHROPIC_API_KEY")),
+)
+```
+
+## Options
+
+```go
+model := anthropic.New(
+    anthropic.WithAPIKey("sk-ant-..."),
+    anthropic.WithModel("claude-sonnet-4-20250514"),
+    anthropic.WithMaxTokens(4096),
+)
+```
+
+## Supported Models
+
+| Model | ID |
+|-------|-----|
+| Claude Opus 4 | `claude-opus-4-20250514` |
+| Claude Sonnet 4 | `claude-sonnet-4-20250514` |
+| Claude Haiku 3.5 | `claude-haiku-3-5-20241022` |

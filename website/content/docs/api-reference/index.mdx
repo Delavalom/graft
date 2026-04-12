@@ -1,0 +1,133 @@
+---
+title: API Reference
+description: Complete reference for all public types, interfaces, and functions in the Graft package.
+---
+
+# API Reference
+
+This is a quick reference for the core types and interfaces. For the full godoc, see [pkg.go.dev/github.com/delavalom/graft](https://pkg.go.dev/github.com/delavalom/graft).
+
+## Core Types
+
+### Agent
+
+```go
+type Agent struct {
+    Name         string
+    Instructions string
+    Tools        []Tool
+    Model        string
+    Temperature  *float64
+    MaxTokens    *int
+    ToolChoice   ToolChoice
+    Guardrails   []Guardrail
+    Handoffs     []Handoff
+    SubAgents    []*SubAgent
+    Hooks        *HookRegistry
+    Metadata     map[string]any
+}
+```
+
+### Message
+
+```go
+type Message struct {
+    Role       string      // "system", "user", "assistant", "tool"
+    Content    string
+    ToolCalls  []ToolCall
+    ToolCallID string
+    Name       string
+}
+```
+
+### Result
+
+```go
+type Result struct {
+    FinalOutput string
+    Messages    []Message
+    Agent       *Agent
+}
+```
+
+## Interfaces
+
+### LanguageModel
+
+```go
+type LanguageModel interface {
+    Generate(ctx context.Context, params GenerateParams) (*GenerateResult, error)
+    Stream(ctx context.Context, params GenerateParams) (<-chan StreamChunk, error)
+    ModelID() string
+}
+```
+
+### Tool
+
+```go
+type Tool interface {
+    Name() string
+    Description() string
+    Schema() json.RawMessage
+    Execute(ctx context.Context, params json.RawMessage) (any, error)
+}
+```
+
+### Runner
+
+```go
+type Runner interface {
+    Run(ctx context.Context, agent *Agent, messages []Message, opts ...RunOption) (*Result, error)
+    RunStream(ctx context.Context, agent *Agent, messages []Message, opts ...RunOption) (<-chan StreamEvent, error)
+}
+```
+
+### Guardrail
+
+```go
+type Guardrail interface {
+    Name() string
+    Type() GuardrailType
+    Validate(ctx context.Context, data *ValidationData) (*ValidationResult, error)
+}
+```
+
+## Functions
+
+### NewTool
+
+```go
+func NewTool[P any, R any](name, description string, fn func(ctx context.Context, params P) (R, error)) Tool
+```
+
+Creates a type-safe tool. `P` is the parameter struct (auto-generates JSON Schema), `R` is the return type.
+
+### NewDefaultRunner
+
+```go
+func NewDefaultRunner(model LanguageModel) *DefaultRunner
+```
+
+Creates a runner with the given language model.
+
+### NewHookRegistry
+
+```go
+func NewHookRegistry() *HookRegistry
+```
+
+Creates an empty hook registry for registering lifecycle callbacks.
+
+## Error Types
+
+```go
+const (
+    ErrProvider        ErrorType = "provider_error"
+    ErrInvalidToolCall ErrorType = "invalid_tool_call"
+    ErrGuardrailTrip   ErrorType = "guardrail_trip"
+    ErrMaxIterations   ErrorType = "max_iterations"
+    ErrTimeout         ErrorType = "timeout"
+)
+```
+
+Use `NewAgentError(errType, message, cause)` to create errors with optional `Context` map.

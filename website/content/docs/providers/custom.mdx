@@ -1,0 +1,68 @@
+---
+title: Custom Provider
+description: Build your own LLM provider by implementing the LanguageModel interface.
+---
+
+# Custom Provider
+
+Implement the `LanguageModel` interface to integrate any LLM backend.
+
+## The Interface
+
+```go
+type LanguageModel interface {
+    Generate(ctx context.Context, params GenerateParams) (*GenerateResult, error)
+    Stream(ctx context.Context, params GenerateParams) (<-chan StreamChunk, error)
+    ModelID() string
+}
+```
+
+## Example Implementation
+
+```go
+type MyProvider struct {
+    apiKey string
+    model  string
+}
+
+func (p *MyProvider) ModelID() string {
+    return p.model
+}
+
+func (p *MyProvider) Generate(ctx context.Context, params graft.GenerateParams) (*graft.GenerateResult, error) {
+    // 1. Convert params.Messages to your API format
+    // 2. Convert params.Tools to your API's tool format
+    // 3. Make HTTP request
+    // 4. Parse response into GenerateResult
+    
+    return &graft.GenerateResult{
+        Message: graft.Message{
+            Role:    "assistant",
+            Content: "response from your API",
+        },
+        Usage: graft.Usage{
+            InputTokens:  100,
+            OutputTokens: 50,
+        },
+    }, nil
+}
+
+func (p *MyProvider) Stream(ctx context.Context, params graft.GenerateParams) (<-chan graft.StreamChunk, error) {
+    ch := make(chan graft.StreamChunk)
+    go func() {
+        defer close(ch)
+        // Stream chunks from your API
+        ch <- graft.StreamChunk{
+            Type:  graft.ChunkToken,
+            Token: "Hello",
+        }
+    }()
+    return ch, nil
+}
+```
+
+## Tips
+
+- Return `ErrProvider` errors with descriptive messages — end users may not have access to provider consoles
+- Handle rate limits and retries within your provider
+- Use `params.Metadata` to pass provider-specific options without breaking the interface

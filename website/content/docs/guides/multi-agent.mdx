@@ -1,0 +1,82 @@
+---
+title: Multi-Agent Orchestration
+description: Build systems where multiple specialized agents collaborate to solve complex tasks.
+---
+
+# Multi-Agent Orchestration
+
+Complex problems benefit from multiple agents working together. Graft supports multi-agent orchestration through handoffs and sub-agents.
+
+## The Triage Pattern
+
+A single router agent classifies the user's intent and delegates to specialists:
+
+```go
+func main() {
+    model := openai.New(openai.WithAPIKey(os.Getenv("OPENAI_API_KEY")))
+    runner := graft.NewDefaultRunner(model)
+
+    billing := &graft.Agent{
+        Name:         "billing",
+        Instructions: "You handle billing questions. You can look up invoices and process refunds.",
+        Tools:        []graft.Tool{lookupInvoiceTool, processRefundTool},
+    }
+
+    technical := &graft.Agent{
+        Name:         "technical",
+        Instructions: "You handle technical issues. You can check system status and file bug reports.",
+        Tools:        []graft.Tool{systemStatusTool, fileBugTool},
+    }
+
+    triage := &graft.Agent{
+        Name:         "triage",
+        Instructions: "Determine what the user needs and route them to the right specialist.",
+        Handoffs: []graft.Handoff{
+            {Target: billing, Description: "Payment, invoices, refunds"},
+            {Target: technical, Description: "Bugs, outages, technical issues"},
+        },
+    }
+
+    result, err := runner.Run(ctx, triage, messages)
+    fmt.Printf("Handled by: %s\n", result.Agent.Name)
+}
+```
+
+## The Pipeline Pattern
+
+Agents process work sequentially, each adding to the conversation:
+
+```go
+researcher := &graft.Agent{
+    Name:         "researcher",
+    Instructions: "Research the given topic thoroughly. Use search tools. When done, hand off to the writer.",
+    Tools:        []graft.Tool{webSearchTool, readPageTool},
+    Handoffs:     []graft.Handoff{{Target: writer, Description: "Pass research to writer"}},
+}
+
+writer := &graft.Agent{
+    Name:         "writer",
+    Instructions: "Using the research in the conversation, write a well-structured article.",
+    Handoffs:     []graft.Handoff{{Target: editor, Description: "Pass draft to editor"}},
+}
+
+editor := &graft.Agent{
+    Name:         "editor",
+    Instructions: "Review the article for clarity, grammar, and structure. Output the final version.",
+}
+
+result, _ := runner.Run(ctx, researcher, messages)
+// The result contains the edited final article
+```
+
+## Tracking the Active Agent
+
+Use hooks to observe agent switches:
+
+```go
+hooks := graft.NewHookRegistry()
+hooks.On(graft.HookPostHandoff, func(ctx context.Context, payload *graft.HookPayload) (*graft.HookResult, error) {
+    log.Printf("Switched to agent: %s", payload.Agent.Name)
+    return nil, nil
+})
+```
