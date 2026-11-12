@@ -6,8 +6,9 @@
     "dev": "next dev",
     "build": "next build",
     "postinstall": "fumadocs-mdx",
-    "start": "next start",
-    "lint": "eslint"
+    "start": "bunx wrangler@4.149.0 dev",
+    "lint": "eslint",
+    "deploy": "next build && bunx wrangler@4.149.0 deploy"
   },
   "dependencies": {
     "@types/mdx": "^2.0.13",
